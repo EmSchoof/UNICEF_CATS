@@ -10,7 +10,7 @@ from pilot_variables import PILOT_EVENTTYPES, PILOT_IOS2
 # (2) Event was a Material or Verbal Conflict
 # - QuadClass IN (3,4)
 # (3) Event Occurred within the in Last 2 years
-# - DATE(Year) >= DATE_SUB(CURRENT_DATE(), INTERVAL 2 YEAR)
+# - Year >= EXTRACT(YEAR FROM CURRENT_TIMESTAMP()) - 2
 # (4) Mention Confidence was 50% or Higher
 # - Confidence >= 50
 # (5)
@@ -53,7 +53,7 @@ PILOT_INITIAL = """SELECT  e.country,
                           FROM
                             `gdelt-bq.gdeltv2.events`
                           WHERE
-                            DATE(Year) >= DATE_SUB(CURRENT_DATE(), INTERVAL 1 YEAR)
+                            Year >= EXTRACT(YEAR FROM CURRENT_TIMESTAMP()) - 2
                             AND ActionGeo_CountryCode IN {0}
                             AND EventRootCode IN {1}
                             AND QuadClass IN (3,4)) e
