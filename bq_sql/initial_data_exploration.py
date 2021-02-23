@@ -7,21 +7,18 @@ from pilot_variables import PILOT_EVENTTYPES, PILOT_IOS2
 # Specifications:
 # (1) Event Took Place in One of 60 Pilot Countries
 # - ActionGeo_CountryCode IN PILOT_IOS2
-# (2) Event was a Material or Verbal Conflict
-# - QuadClass IN (3,4)
-# (3) Event Occurred within the in Last 2 years
+# (2) Event Occurred within the in Last 2 years
 # - Year >= EXTRACT(YEAR FROM CURRENT_TIMESTAMP()) - 2
-# (4) Mention Confidence was 50% or Higher
+# (3) Mention Confidence was 50% or Higher
 # - Confidence >= 50
-# (5)
+# (4) Event Root Code within Pilot Event Types
+# - EventRootCode IN PILOT_EVENTTYPES
 
 # write BQ SQL
 PILOT_INITIAL = """SELECT  e.country,
                            m.global_event_id,
                            e.cameo_class,
                            e.cameo_code,
-                           e.cameo_base_code,
-                           e.cameo_root_code,
                            e.event_avg_tone,
                            e.goldstein,
                            m.global_event_id,
@@ -42,12 +39,10 @@ PILOT_INITIAL = """SELECT  e.country,
                                Confidence >= 50) m
                             INNER JOIN 
                             (SELECT
-                            ActionGeo_FullName AS country,
+                            ActionGeo_CountryCode AS country,
                             GLOBALEVENTID AS global_event_id,
                             QuadClass AS cameo_class,
                             EventCode AS cameo_code,
-                            EventBaseCode AS cameo_base_code,
-                            EventRootCode AS cameo_root_code,
                             AvgTone AS event_avg_tone,
                             GoldsteinScale AS goldstein
                           FROM
@@ -55,6 +50,14 @@ PILOT_INITIAL = """SELECT  e.country,
                           WHERE
                             Year >= EXTRACT(YEAR FROM CURRENT_TIMESTAMP()) - 2
                             AND ActionGeo_CountryCode IN {0}
-                            AND EventRootCode IN {1}
-                            AND QuadClass IN (3,4)) e
+                            AND EventRootCode IN {1}) e
                             ON m.global_event_id = e.global_event_id""".format(PILOT_IOS2, PILOT_EVENTTYPES)
+
+# -- Temporary BQ Data Details --
+# Table ID:   testing-queries-feb2021:initial_data_pull.last-two-years
+# Table size:	2.66 GB
+# Number of rows:	27,208,461
+# Created:	Feb 23, 2021, 10:24:25 AM
+# Table expiration:	Apr 24, 2021, 10:24:25 AM
+# Last modified:	Feb 23, 2021, 10:24:25 AM
+# Data location:	US
