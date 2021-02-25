@@ -11,7 +11,7 @@ from google.cloud import bigquery
 client = bigquery.Client()
 
 # define a test query
-QUERY = ('SELECT * FROM `testing-queries-feb2021.initial_data_pull.test_table`')
+QUERY = ('SELECT * FROM `testing-queries-feb2021.initial_data_pull.last-two-years` LIMIT 1000')
 
 # initiate query request
 query_job = client.query(QUERY)
