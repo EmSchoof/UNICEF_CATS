@@ -14,7 +14,7 @@ from pilot_variables import PILOT_EVENTTYPES, PILOT_IOS2
 # (4) Event Root Code within Pilot Event Types
 # - EventRootCode IN PILOT_EVENTTYPES
 
-# write BQ SQL
+# TODO: Rewrite as Data Schema -> BQ will no longer be utilized
 PILOT_INITIAL = """SELECT  e.country,
                            m.global_event_id,
                            e.cameo_class,
