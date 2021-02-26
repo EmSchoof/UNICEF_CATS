@@ -81,7 +81,7 @@ target/
 .ipynb_checkpoints
 
 # Images
-.png
+*.png
 
 # IPython
 profile_default/
