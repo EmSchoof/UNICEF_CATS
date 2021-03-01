@@ -4,6 +4,7 @@ sudo rm ../data/latest_gdelt_events.csv.zip
 sudo rm ../data/latest_gdelt_mentions.csv
 sudo rm ../data/latest_gdelt_mentions.csv.zip
 
+
 # --- Get url towards latest GDELT updates ---
 # EVENTS
 e_content_regex="export.CSV.zip"
@@ -36,6 +37,7 @@ e_csv_file_name="${file_components[0]}.${file_components[1]}.${file_components[2
 # MENTIONS
 IFS='.' read -a file_components <<< "$m_compressed_file_name"
 m_csv_file_name="${file_components[0]}.${file_components[1]}.${file_components[2]}"
+
 
 # --- Download and extract latest events ---
 # EVENTS
