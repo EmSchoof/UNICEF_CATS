@@ -9,7 +9,7 @@ PILOT_COUNTRIES_IOS2: [ 'AF','AO','BD','BR','BF','BI','CM','CF','TD','CG','CD','
 
 # GDELT Data CSVs Information
 #Events
-EVENTS_CSV: '../data/latest_gdelt_events.csv'
+EVENTS_CSV: '../select_data/data/latest_gdelt_events.csv'
 EVENTS_COLS_ALL: ['GLOBALEVENTID','SQLDATE','MonthYear','Year','FractionDate','Actor1Code',
                  'Actor1Name','Actor1CountryCode','Actor1KnownGroupCode','Actor1EthnicCode',
                  'Actor1Religion1Code','Actor1Religion2Code','Actor1Type1Code','Actor1Type2Code',
@@ -24,14 +24,14 @@ EVENTS_COLS_ALL: ['GLOBALEVENTID','SQLDATE','MonthYear','Year','FractionDate','A
                  'Actor2Geo_FeatureID','ActionGeo_Type','ActionGeo_FullName','ActionGeo_CountryCode',
                  'ActionGeo_ADM1Code','ActionGeo_ADM2Code','ActionGeo_Lat','ActionGeo_Long',
                  'ActionGeo_FeatureID','DATEADDED','SOURCEURL']
-EVENTS_COLS_SELECT: ['GLOBALEVENTID','SQLDATE','EventCode','EventRootCode','QuadClass',
+EVENTS_COLS_SELECT: ['GLOBALEVENTID','EventCode','EventRootCode','QuadClass',
                     'GoldsteinScale','NumMentions','NumSources','NumArticles','AvgTone',
                     'ActionGeo_Type','ActionGeo_FullName','ActionGeo_CountryCode',
                     'ActionGeo_Lat','ActionGeo_Long','SOURCEURL']
 #Mentions
-MENTIONS_CSV: '../data/latest_gdelt_mentions.csv'
+MENTIONS_CSV: '../select_data/data/latest_gdelt_mentions.csv'
 MENTIONS_COLS_ALL: ['GLOBALEVENTID','EventTimeDate','MentionTimeDate','MentionType','MentionSourceName',
                     'MentionIdentifier','SentenceID','Actor1CharOffset','Actor2CharOffset','ActionCharOffset',
                     'InRawText','Confidence','MentionDocLen','MentionDocTone','MentionDocTranslationInfo','Extras']
-MENTIONS_COLS_SELECT: ['GLOBALEVENTID','MentionIdentifier','MentionTimeDate','Confidence',
+MENTIONS_COLS_SELECT: ['GLOBALEVENTID','EventTimeDate', 'MentionIdentifier','MentionTimeDate','Confidence',
                        'MentionDocLen','MentionDocTone']
