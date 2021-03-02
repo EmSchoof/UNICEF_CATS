@@ -25,13 +25,11 @@ EVENTS_COLS_ALL: ['GLOBALEVENTID','SQLDATE','MonthYear','Year','FractionDate','A
                  'ActionGeo_ADM1Code','ActionGeo_ADM2Code','ActionGeo_Lat','ActionGeo_Long',
                  'ActionGeo_FeatureID','DATEADDED','SOURCEURL']
 EVENTS_COLS_SELECT: ['GLOBALEVENTID','EventCode','EventRootCode','QuadClass',
-                    'GoldsteinScale','NumMentions','NumSources','NumArticles','AvgTone',
-                    'ActionGeo_Type','ActionGeo_FullName','ActionGeo_CountryCode',
-                    'ActionGeo_Lat','ActionGeo_Long','SOURCEURL']
+                    'GoldsteinScale','ActionGeo_Type','ActionGeo_FullName',
+                    'ActionGeo_CountryCode', 'ActionGeo_Lat','ActionGeo_Long','SOURCEURL']
 #Mentions
 MENTIONS_CSV: '../select_data/data/latest_gdelt_mentions.csv'
 MENTIONS_COLS_ALL: ['GLOBALEVENTID','EventTimeDate','MentionTimeDate','MentionType','MentionSourceName',
                     'MentionIdentifier','SentenceID','Actor1CharOffset','Actor2CharOffset','ActionCharOffset',
                     'InRawText','Confidence','MentionDocLen','MentionDocTone','MentionDocTranslationInfo','Extras']
-MENTIONS_COLS_SELECT: ['GLOBALEVENTID','EventTimeDate', 'MentionIdentifier','MentionTimeDate','Confidence',
-                       'MentionDocLen','MentionDocTone']
+MENTIONS_COLS_SELECT: ['GLOBALEVENTID','EventTimeDate', 'MentionTimeDate','Confidence','MentionDocTone']
