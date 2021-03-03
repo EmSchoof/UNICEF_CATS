@@ -24,7 +24,7 @@ EVENTS_COLS_ALL: ['GLOBALEVENTID','SQLDATE','MonthYear','Year','FractionDate','A
                  'Actor2Geo_FeatureID','ActionGeo_Type','ActionGeo_FullName','ActionGeo_CountryCode',
                  'ActionGeo_ADM1Code','ActionGeo_ADM2Code','ActionGeo_Lat','ActionGeo_Long',
                  'ActionGeo_FeatureID','DATEADDED','SOURCEURL']
-EVENTS_COLS_SELECT: ['GLOBALEVENTID','EventCode','EventRootCode','QuadClass',
+EVENTS_COLS_SELECT: ['GLOBALEVENTID','SQLDATE','EventCode','EventRootCode','QuadClass',
                     'GoldsteinScale','ActionGeo_Type','ActionGeo_FullName',
                     'ActionGeo_CountryCode', 'ActionGeo_Lat','ActionGeo_Long','SOURCEURL']
 #Mentions
