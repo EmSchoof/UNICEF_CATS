@@ -1,5 +1,6 @@
 import matplotlib.pyplot as plt
 import pandas as pd
+from pylab import rcParams
 from random import randint
 
 
@@ -32,6 +33,11 @@ def plot_piechart(df: pd, target_cols: str, pie_title: str, save_png: str) -> pd
     colors = []
     for i in range(len(labels)):
         colors.append('#%06X' % randint(0, 0xFFFFFF))
+
+    if len(np.unique(labels)) > 10:
+        rcParams['figure.figsize'] = 30, 30
+    else:
+        rcParams['figure.figsize'] = 16, 16
 
     # Plot
     plt.pie(df['%'], colors=colors, labels=labels, autopct='%1.1f%%')
