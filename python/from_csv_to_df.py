@@ -1,4 +1,6 @@
+import matplotlib.pyplot as plt
 import pandas as pd
+from random import randint
 
 
 def get_select_data(filepath: str, all_cols: list, select_cols: list) -> object:
@@ -16,3 +18,23 @@ def get_select_data(filepath: str, all_cols: list, select_cols: list) -> object:
 
     # Select specific columns
     return latest_update_df[select_cols]
+
+
+def plot_piechart(df: pd, target_cols: str, pie_title: str, save_png: str) -> pd:
+    """ Create colorful pie chart showing percent of events by variable label
+    :param df: Dataframe created via the get_var_percentages() function
+    :param target_cols: Target column in the get_var_percentages() function
+    :param pie_title: Target column string for pie chart title
+    :param save_png: String based on the target column for storing png
+    """
+    # Create color list for pie chart visualization
+    labels = df[target_cols]
+    colors = []
+    for i in range(len(labels)):
+        colors.append('#%06X' % randint(0, 0xFFFFFF))
+
+    # Plot
+    plt.pie(df['%'], colors=colors, labels=labels, autopct='%1.1f%%')
+    plt.title('Percentage of Events by ' + pie_title)
+    plt.savefig('../' + save_png + '.png', dpi=300)
+    plt.show()
