@@ -41,9 +41,9 @@ m_csv_file_name="${file_components[0]}.${file_components[1]}.${file_components[2
 
 # --- Download and extract latest events ---
 # EVENTS
-curl $e_latest_gdelt_url > data/latest_gdelt_events_3.csv.zip
-unzip -p "data/latest_gdelt_events_3.csv.zip" $e_csv_file_name > data/latest_gdelt_events_3.csv
+curl $e_latest_gdelt_url > data/latest_gdelt_events.csv.zip
+unzip -p "data/latest_gdelt_events.csv.zip" $e_csv_file_name > data/latest_gdelt_events.csv
 
 # MENTIONS
-curl $m_latest_gdelt_url > data/latest_gdelt_mentions_3.csv.zip
-unzip -p "data/latest_gdelt_mentions.csv_3.zip" $m_csv_file_name > data/latest_gdelt_mentions_3.csv
+curl $m_latest_gdelt_url > data/latest_gdelt_mentions.csv.zip
+unzip -p "data/latest_gdelt_mentions.csv.zip" $m_csv_file_name > data/latest_gdelt_mentions.csv
