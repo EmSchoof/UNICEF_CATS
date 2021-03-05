@@ -40,5 +40,5 @@ MENTIONS_COLS_SELECT: ['GLOBALEVENTID','EventTimeDate', 'MentionTimeDate','Confi
 
 #Data Factory Output
 DESIRED_COLUMNS: ['GLOBALEVENTID', 'EventTimeDate', 'MentionTimeDate', 'DaysBetween', 'Confidence','MentionDocTone',
-                  'ActionGeo_CountryCode', 'ActionGeo_FullName', 'EventCode', 'QuadClass','GoldsteinScale',
-                  'ActionGeo_Lat','ActionGeo_Long','SOURCEURL']
+                  'ActionGeo_CountryCode', 'ActionGeo_FullName', 'EventCode', 'EventRootCodeString', 'QuadClass',
+                  'QuadClassString','GoldsteinScale','ActionGeo_Lat','ActionGeo_Long','SOURCEURL']
