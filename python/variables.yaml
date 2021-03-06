@@ -37,3 +37,8 @@ MENTIONS_COLS_ALL: ['GLOBALEVENTID','EventTimeDate','MentionTimeDate','MentionTy
                     'MentionIdentifier','SentenceID','Actor1CharOffset','Actor2CharOffset','ActionCharOffset',
                     'InRawText','Confidence','MentionDocLen','MentionDocTone','MentionDocTranslationInfo','Extras']
 MENTIONS_COLS_SELECT: ['GLOBALEVENTID','EventTimeDate', 'MentionTimeDate','Confidence','MentionDocTone']
+
+#Data Factory Output
+DESIRED_COLUMNS: ['GLOBALEVENTID', 'EventTimeDate', 'MentionTimeDate', 'DaysBetween', 'Confidence','MentionDocTone',
+                  'ActionGeo_CountryCode', 'ActionGeo_FullName', 'EventCode', 'EventRootCodeString', 'QuadClass',
+                  'QuadClassString','GoldsteinScale','ActionGeo_Lat','ActionGeo_Long','SOURCEURL']
