@@ -1,6 +1,7 @@
 # Databricks notebook source
 # DBTITLE 1,Import PySpark Modules
 from functools import reduce
+from itertools import chain
 import pyspark.sql.functions as F
 from pyspark.sql.types import *
 
@@ -72,6 +73,19 @@ gdeltFeb.select("EventCode", "EventRootCode").describe().show()
 
 # COMMAND ----------
 
+# MAGIC %md
+# MAGIC 
+# MAGIC Based on project requirements, the data source for visualization presence of non-null values in the following columns:
+# MAGIC   
+# MAGIC - GlobalEventId
+# MAGIC - EventTimeDate
+# MAGIC - ActionGeo_CountryCode
+# MAGIC - EventCode
+# MAGIC - GoldsteinScale
+# MAGIC - MentionDocTone
+
+# COMMAND ----------
+
 # DBTITLE 1,Assess Null Values
 def count_missings(spark_df, sort=True):
     """
@@ -95,26 +109,13 @@ count_missings(gdeltFeb)
 
 # COMMAND ----------
 
-# DBTITLE 1,Drop Rows with Nulls in Key Columns (add all in list as a precaution)
+# DBTITLE 1,DATA REMOVAL (1):  Drop Rows with Nulls in Key Columns (add all in list as a precaution)
+print('Original Dataframe: ', (gdeltFeb.count(), len(gdeltFeb.columns)))
 gdeltFebNoNulls = gdeltFeb.na.drop(subset=["GLOBALEVENTID","EventTimeDate","MentionTimeDate", "Confidence", "MentionDocTone", "EventRootCode", "QuadClass", "GoldsteinScale"])
 
 # Verify output
+print('Removal of Nulls Dataframe: ', (gdeltFebNoNulls.count(), len(gdeltFebNoNulls.columns)))
 count_missings(gdeltFebNoNulls)
-
-# COMMAND ----------
-
-# DBTITLE 1,Convert Integer Date Columns to Strings then to DateTimes
-# Create function to convert string cells to datetimes
-date_func =  F.udf (lambda x: datetime.strptime(x, 'yyyyMMddHHmmss'), DateType())
-
-# Convert date-int columns to datetime columns
-gdeltFebNoNulls = gdeltFebNoNulls.withColumn('EventTimeDate', F.expr("CAST(EventTimeDate AS INTEGER)"))
-gdeltFebNoNulls = gdeltFebNoNulls.withColumn('EventTimeDate', date_func(F.col('EventTimeDate')))
-gdeltFebNoNulls = gdeltFebNoNulls.withColumn('MentionTimeDate', F.expr("CAST(MentionTimeDate AS INTEGER)"))
-gdeltFebNoNulls = gdeltFebNoNulls.withColumn('MentionTimeDate', date_func(F.col('MentionTimeDate')))
-
-# Confirm output
-gdeltFeb.printSchema()
 
 # COMMAND ----------
 
@@ -122,162 +123,92 @@ gdeltFebNoNulls.limit(5).toPandas()
 
 # COMMAND ----------
 
+# DBTITLE 1,Convert Integer Date Columns to Strings then to DateTimes
+# Convert date-int columns to string columns
+gdeltFebNoNulls = gdeltFebNoNulls.withColumn('EventTimeDate', F.expr("CAST(EventTimeDate AS STRING)"))
+gdeltFebNoNulls = gdeltFebNoNulls.withColumn('MentionTimeDate', F.expr("CAST(MentionTimeDate AS STRING)"))
+
+# Convert date-strings to date columns
+gdeltFebNoNulls = gdeltFebNoNulls.withColumn('EventTimeDate', F.to_date(F.unix_timestamp(F.col('EventTimeDate'), 'yyyyMMddHHmmss').cast("timestamp")))
+gdeltFebNoNulls = gdeltFebNoNulls.withColumn('MentionTimeDate', F.to_date(F.unix_timestamp(F.col('MentionTimeDate'), 'yyyyMMddHHmmss').cast("timestamp")))
+
+# Confirm output
+gdeltFebNoNulls.printSchema()
+gdeltFebNoNulls.limit(2).toPandas()
+
+# COMMAND ----------
+
 # DBTITLE 1,Calculate Days Between Mentions and Events Data
-gdeltFebDates = gdeltFebNoNulls.withColumn(
-          'DaysBetween',
-          F.datediff(
-            F.col('MentionTimeDate'),F.col('EventTimeDate')
-          ).cast('int')
-)
-gdeltFebDates.printSchema()
-gdeltFebDates.head(2)
+gdeltFebNoNulls = gdeltFebNoNulls.withColumn('DaysBetween', F.datediff(F.col('MentionTimeDate'),F.col('EventTimeDate')).cast('int'))
+gdeltFebNoNulls.printSchema()
+gdeltFebNoNulls.limit(2).toPandas()
 
 # COMMAND ----------
 
-# DBTITLE 1,Convert 2 Lists to Dictionary
-from itertools import chain
-dict_func = F.udf (lambda keys, vals: dict(zip(keys, vals)))
+# DBTITLE 1,DATA REMOVAL (2): Select Mentions within first 60 Days of an Event
+print('Removal of Nulls Dataframe: ', (gdeltFebNoNulls.count(), len(gdeltFebNoNulls.columns)))
 
-mapping_expr = F.udf (lambda mapping: F.create_map([F.lit(x) for x in F.chain(*mapping.items())]))
+# Select Data Based on DaysBetween Column
+gdeltFebNoNulls60D = gdeltFebNoNulls.where(F.col('DaysBetween') <= 60)
 
-
-
-def get_dictionary(l1, l2):
-    """
-    Create Column for Strings Associated with Code Column
-    
-    :param df: dataframe of cleaned data
-    :param codes_col: name of the code column in dataframe
-    :return: dict
-    """
-    
-    assert len(df[codes_col].unique()) == len(strings), "Length of codes and strings list are not equal"
-    
-    # Convert lists to dictionary 
-    codes = df[codes_col].sort_values(ascending=True).unique()
-    code_dict = {codes[i]: strings[i] for i in range(len(codes))}
-    
-    # Add column for code strings
-    codes_string_col = codes_col+'String'
-    df[codes_string_col] = df[codes_col].map(code_dict)
-
-    # verify output
-    verify_df = df[[codes_col, codes_string_col]].sort_values(by=codes_col, ascending=True).drop_duplicates()
-
-    # return df and verified output
-    return df, verify_df
-
-# COMMAND ----------
-
-# DBTITLE 1,Define Reusable Python Functions
-def get_code_strings(df, codes_col: str, strings: list):
-    """
-    Create Column for Strings Associated with Code Column
-    
-    :param df: dataframe of cleaned data
-    :param codes_col: name of the code column in dataframe
-    :param strings: list of strings associated with code column
-    :rtype: dataframes
-    :return: 
-        :df: param dataframe with new string column
-        :verified_df: dataframe to confirm correct code/string column creation
-    """
-    
-    assert len(df[codes_col].unique()) == len(strings), "Length of codes and strings list are not equal"
-    
-    # Convert lists to dictionary 
-    codes = df[codes_col].sort_values(ascending=True).unique()
-    code_dict = {codes[i]: strings[i] for i in range(len(codes))}
-    
-    # Add column for code strings
-    codes_string_col = codes_col+'String'
-    df[codes_string_col] = df[codes_col].map(code_dict)
-
-    # verify output
-    verify_df = df[[codes_col, codes_string_col]].sort_values(by=codes_col, ascending=True).drop_duplicates()
-
-    # return df and verified output
-    return df, verify_df
-
-# COMMAND ----------
-
-import pandas as pd
-df = spark.createDataFrame(pd.DataFrame({'integers': [1,2,3,4,5]}))
-strings = [1,2,3,4,5]
-F.length(df.select(F.countDistinct('integers'))) == F.lenght(strings)
-
-# COMMAND ----------
-
-# DBTITLE 1,Select Mentions within first 60 Days of an Event
-# Calculate days between
-#bq_gdeltFebDaysBetween = bq_gdelt.withColumn('DaysBetween', bq_gdelt.select(F.col("MentionTimeDate")-F.col("EventTimeDate")))
-bq_gdelt.select(F.col("MentionTimeDate")-F.col("EventTimeDate"))
-
-# COMMAND ----------
-
-# MAGIC %md
-# MAGIC 
-# MAGIC Based on project requirements, the data source for visualization presence of non-null values in the following columns:
-# MAGIC   
-# MAGIC - GlobalEventId
-# MAGIC - EventTimeDate
-# MAGIC - ActionGeo_CountryCode
-# MAGIC - EventCode
-# MAGIC - GoldsteinScale
-# MAGIC - MentionDocTone
-
-# COMMAND ----------
-
-# DBTITLE 0,Select Data Associated with Target Country Code List
-# Drop all rows in merged_df with nulls in the specified columns
-required_value_columns = ['GLOBALEVENTID', 'EventTimeDate', 'ActionGeo_CountryCode', 
-                          'EventCode', 'GoldsteinScale', 'MentionDocTone']
-
-cleaned_merged_df = merged_df[~pd.isnull(merged_df[required_value_columns]).any(axis=1)].reset_index(drop=True)
-print(cleaned_merged_df.shape)
-cleaned_merged_df.head(1)
+# Confirm output
+print('Mentions within 60days of Event Dataframe: ', (gdeltFebNoNulls60D.count(), len(gdeltFebNoNulls60D.columns)))
 
 # COMMAND ----------
 
 # DBTITLE 1,Create Cameo Code Root Integer Values with Associated String
-# Convert column to integer
-new_column_udf = udf(lambda name: None if name == 0 else name, StringType())
-gdeltFeb = gdeltFeb.withColumn("EventRootCode", new_column_udf(gdeltFeb.EventRootCode))
-cameo_codes = gdeltFeb.select('EventRootCode').distinct().rdd.map(lambda r: r[0]).collect()
-print(cameo_codes)
-
-# COMMAND ----------
-
-# DBTITLE 1,Create Cameo Code Root Integer Values with Associated String
+# Create CAMEO verbs list
 cameo_verbs = ['MAKE PUBLIC STATEMENT','APPEAL','EXPRESS INTENT TO COOPERATE','CONSULT',
               'ENGAGE IN DIPLOMATIC COOPERATION','ENGAGE IN MATERIAL COOPERATION','PROVIDE AID',
                'YIELD','INVESTIGATE','DEMAND','DISAPPROVE','REJECT','THREATEN','PROTEST',
                'EXHIBIT MILITARY POSTURE','REDUCE RELATIONS','COERCE','ASSAULT','FIGHT',
                'ENGAGE IN UNCONVENTIONAL MASS VIOLENCE']
 print(cameo_verbs)
-cameo_codes = gdeltFeb.select('EventRootCode').distinct().rdd.map(lambda r: r[0]).collect()
-print(cameo_codes)
+
+# Create distinct list of CAMEO EventRootCodes
+cameo_codes = gdeltFebNoNulls60D.select('EventRootCode').distinct().rdd.map(lambda r: r[0]).collect()
+cameo_codes_ordered = sorted(cameo_codes)
+print(cameo_codes_ordered)
+
+# Create CAMEO EventRootCodes: CAMEO verbs dictionary
+cameo_verbs_dict = dict(zip(cameo_codes_ordered, cameo_verbs))
+cameo_verbs_dict
 
 # COMMAND ----------
 
-# verify output
-cleaned_merged_df.head(2)
+# Map dictionary over df to create string column
+mapping_expr = F.create_map([F.lit(x) for x in chain(*cameo_verbs_dict.items())])
+gdeltFebNoNulls60D = gdeltFebNoNulls60D.withColumn('EventRootCodeString', mapping_expr[F.col('EventRootCode')])
+
+# Confirm accurate output
+gdeltFebNoNulls60D.select('EventRootCode', 'EventRootCodeString').dropDuplicates().sort(F.col('EventRootCode')).show()
+gdeltFebNoNulls60D.limit(1).toPandas()
 
 # COMMAND ----------
 
 # DBTITLE 1,Create Cameo QuadClass Integer Values with Associated String
+# Create CAMEO QuadClass String List
 cameo_quadclass = ['Verbal Cooperation','Material Cooperation','Verbal Conflict','Material Conflict']
 print(cameo_quadclass)
 
-# get string column
-cleaned_merged_df, cameo_quadclass_df = get_code_strings(cleaned_merged_df, 'QuadClass', cameo_quadclass)
-cameo_quadclass_df
+# Create distinct list of CAMEO QuadClass codes
+cameo_quadclass_codes = gdeltFebNoNulls60D.select('QuadClass').distinct().rdd.map(lambda r: r[0]).collect()
+cameo_quadclass_codes_ordered = sorted(cameo_quadclass_codes)
+print(cameo_quadclass_codes_ordered)
+
+# Create CAMEO QuadClass: CAMEO QuadClass String dictionary
+cameo_quadclass_dict = dict(zip(cameo_quadclass_codes_ordered, cameo_quadclass))
+cameo_quadclass_dict
 
 # COMMAND ----------
 
-# DBTITLE 0,Start Visualizing Data
-# verify output
-cleaned_merged_df.head(2)
+# Map dictionary over df to create string column
+mapping_expr = F.create_map([F.lit(x) for x in chain(*cameo_quadclass_dict.items())])
+gdeltFebNoNulls60D = gdeltFebNoNulls60D.withColumn('QuadClassString', mapping_expr[F.col('QuadClass')])
+
+# Confirm accurate output
+gdeltFebNoNulls60D.select('QuadClass', 'QuadClassString').dropDuplicates().sort(F.col('QuadClass')).show()
+gdeltFebNoNulls60D.limit(1).toPandas()
 
 # COMMAND ----------
 
