@@ -107,22 +107,30 @@ count_missings(gdeltFebNoNulls)
 # Create function to convert string cells to datetimes
 date_func =  F.udf (lambda x: datetime.strptime(x, 'yyyyMMddHHmmss'), DateType())
 
-# Apply to date columns
-gdeltFebDates = gdeltFeb.withColumn('EventTimeDate', expr("CAST(EventTimeDate AS INTEGER)"))
-gdeltFebDates = gdeltFebDates.withColumn('EventTimeDate', date_func(F.col('EventTimeDate')))
-gdeltFebDates = gdeltFeb.withColumn('EventTimeDate', expr("CAST(EventTimeDate AS INTEGER)"))
-gdeltFebDates = gdeltFebDates.withColumn('MentionTimeDate', date_func(F.col('MentionTimeDate')))
-gdeltFebDates.printSchema()
+# Convert date-int columns to datetime columns
+gdeltFebNoNulls = gdeltFebNoNulls.withColumn('EventTimeDate', F.expr("CAST(EventTimeDate AS INTEGER)"))
+gdeltFebNoNulls = gdeltFebNoNulls.withColumn('EventTimeDate', date_func(F.col('EventTimeDate')))
+gdeltFebNoNulls = gdeltFebNoNulls.withColumn('MentionTimeDate', F.expr("CAST(MentionTimeDate AS INTEGER)"))
+gdeltFebNoNulls = gdeltFebNoNulls.withColumn('MentionTimeDate', date_func(F.col('MentionTimeDate')))
+
+# Confirm output
+gdeltFeb.printSchema()
+
+# COMMAND ----------
+
+gdeltFebNoNulls.limit(5).toPandas()
 
 # COMMAND ----------
 
 # DBTITLE 1,Calculate Days Between Mentions and Events Data
-def get_diff(x, y):
-    result = F.datediff(x,y)
-    return result
-
-gdeltFebDates = gdeltFebDates.withColumn('DaysBetween',get_diff('MentionTimeDate','EventTimeDate')).show(2)
+gdeltFebDates = gdeltFebNoNulls.withColumn(
+          'DaysBetween',
+          F.datediff(
+            F.col('MentionTimeDate'),F.col('EventTimeDate')
+          ).cast('int')
+)
 gdeltFebDates.printSchema()
+gdeltFebDates.head(2)
 
 # COMMAND ----------
 
