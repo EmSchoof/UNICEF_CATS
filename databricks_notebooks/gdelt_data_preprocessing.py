@@ -1,5 +1,6 @@
 # Databricks notebook source
 # DBTITLE 1,Import PySpark Modules
+from functools import reduce
 import pyspark.sql.functions as F
 from pyspark.sql.types import *
 
@@ -14,20 +15,20 @@ bq_gdelt.limit(10).toPandas()
 
 # DBTITLE 1,Define Data Schema
 data_schema = [
-               StructField('GLOBALEVENTID', IntegerType(), True),
-               StructField('EventTimeDate', StringType(), True),
-               StructField('MentionTimeDate', StringType(), True),
+               StructField('GLOBALEVENTID', IntegerType(), True), # numerical
+               StructField('EventTimeDate', LongType(), True), # numerical
+               StructField('MentionTimeDate', LongType(), True), # numerical
                StructField('Confidence', IntegerType(), True),
                StructField('MentionDocTone', FloatType(), True),
                StructField('EventCode', StringType(), True),
                StructField('EventRootCode', StringType(), True),
-               StructField('QuadClass', IntegerType(), True),
-               StructField('GoldsteinScale', FloatType(), True),
+               StructField('QuadClass', IntegerType(), True), # numerical
+               StructField('GoldsteinScale', FloatType(), True), # numerical
                StructField('ActionGeo_Type', StringType(), True),
                StructField('ActionGeo_FullName', StringType(), True),
                StructField('ActionGeo_CountryCode', StringType(), True),
-               StructField('ActionGeo_Lat', FloatType(), True),
-               StructField('ActionGeo_Long', FloatType(), True),
+               StructField('ActionGeo_Lat', FloatType(), True), # numerical
+               StructField('ActionGeo_Long', FloatType(), True), # numerical
                StructField('SOURCEURL', StringType(), True),
             ]
 
@@ -35,25 +36,39 @@ final_struc = StructType(fields = data_schema)
 
 # COMMAND ----------
 
+# DBTITLE 1,Create DataFrame for Manipulation with Defined Schema
 gdeltFeb = sqlContext.createDataFrame(bq_gdelt.rdd, final_struc)
 gdeltFeb.limit(5).toPandas()
 
 # COMMAND ----------
 
-# DBTITLE 1,Assess GDELT Data Distributions
-gdeltFeb.select("GLOBALEVENTID","EventTimeDate","MentionTimeDate", "Confidence", "MentionDocTone", "EventRootCode", "QuadClass", "GoldsteinScale").describe().show()
+# DBTITLE 1,Assess DataFrame Distributions in Target Variables
+gdeltFeb.select("GLOBALEVENTID","EventTimeDate","MentionTimeDate", "Confidence", "MentionDocTone", "EventCode", "EventRootCode", "QuadClass", "GoldsteinScale").describe().show()
 
 # COMMAND ----------
 
 # DBTITLE 1,Replace Obvious, Irregular Values with Nulls
-# Create noneType function
-null_func = F.udf(lambda value: F.when( value != '--', value).otherwise(lit(None)))
+# Event Code
+gdeltFeb = gdeltFeb.withColumn(
+    'EventCode',
+    F.when(
+        F.col('EventCode').isin('---', '--'),
+        None
+    ).otherwise(F.col('EventCode')).cast('int')
+)
 
-# Apply to columns with Irregular Values
-gdeltFeb = gdeltFeb.withColumn("EventRootCode", null_func(gdeltFeb.EventRootCode))
+# Event Root Code
+gdeltFeb = gdeltFeb.withColumn(
+    'EventRootCode',
+    F.when(
+        F.col('EventRootCode').isin('---', '--'),
+        None
+    ).otherwise(F.col('EventRootCode')).cast('int')
+)
 
-# Confirm output
-gdeltFeb.select("GLOBALEVENTID","EventTimeDate","MentionTimeDate", "Confidence", "MentionDocTone", "EventRootCode", "QuadClass", "GoldsteinScale").describe().show()
+# Verify Output
+print(gdeltFeb.dtypes)
+gdeltFeb.select("EventCode", "EventRootCode").describe().show()
 
 # COMMAND ----------
 
@@ -80,11 +95,6 @@ count_missings(gdeltFeb)
 
 # COMMAND ----------
 
-# String Values
-count_missings(gdeltFeb)
-
-# COMMAND ----------
-
 # DBTITLE 1,Drop Rows with Nulls in Key Columns (add all in list as a precaution)
 gdeltFebNoNulls = gdeltFeb.na.drop(subset=["GLOBALEVENTID","EventTimeDate","MentionTimeDate", "Confidence", "MentionDocTone", "EventRootCode", "QuadClass", "GoldsteinScale"])
 
@@ -93,29 +103,26 @@ count_missings(gdeltFebNoNulls)
 
 # COMMAND ----------
 
-# DBTITLE 1,Convert String Date to Datetime Columns and Replace Null Values
-# Create function to convert string cells to datetimes
-date_func =  F.udf (lambda x: datetime.strptime(x, 'yyyyMMddHHmmss'), DateType())
-
-
-gdeltFeb\
-.withColumn('EventTimeDate-formatted', F.when((gdeltFeb.EventTimeDate.isNull() | (gdeltFeb.EventTimeDate == '')) ,'0')\
-.otherwise(date_func(F.col('EventTimeDate'))))\
-.withColumn('MentionTimeDate-formatted', F.when((gdeltFeb.MentionTimeDate.isNull() | (gdeltFeb.MentionTimeDate == '')) ,'0')\
-.otherwise(date_func(F.col('MentionTimeDate'))))\
-.drop('EventTimeDate','MentionTimeDate')\
-.show()
-
-# COMMAND ----------
-
-# DBTITLE 1,Convert String Date Columns to Datetimes
+# DBTITLE 1,Convert Integer Date Columns to Strings then to DateTimes
 # Create function to convert string cells to datetimes
 date_func =  F.udf (lambda x: datetime.strptime(x, 'yyyyMMddHHmmss'), DateType())
 
 # Apply to date columns
-gdeltFeb = gdeltFeb.withColumn('EventTimeDate', date_func(F.col('EventTimeDate')))
-gdeltFeb = gdeltFeb.withColumn('MentionTimeDate', date_func(F.col('MentionTimeDate')))
-gdeltFeb.printSchema()
+gdeltFebDates = gdeltFeb.withColumn('EventTimeDate', expr("CAST(EventTimeDate AS INTEGER)"))
+gdeltFebDates = gdeltFebDates.withColumn('EventTimeDate', date_func(F.col('EventTimeDate')))
+gdeltFebDates = gdeltFeb.withColumn('EventTimeDate', expr("CAST(EventTimeDate AS INTEGER)"))
+gdeltFebDates = gdeltFebDates.withColumn('MentionTimeDate', date_func(F.col('MentionTimeDate')))
+gdeltFebDates.printSchema()
+
+# COMMAND ----------
+
+# DBTITLE 1,Calculate Days Between Mentions and Events Data
+def get_diff(x, y):
+    result = F.datediff(x,y)
+    return result
+
+gdeltFebDates = gdeltFebDates.withColumn('DaysBetween',get_diff('MentionTimeDate','EventTimeDate')).show(2)
+gdeltFebDates.printSchema()
 
 # COMMAND ----------
 
