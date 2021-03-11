@@ -1,12 +1,4 @@
 # Databricks notebook source
-# DBTITLE 0,Preliminary: Import Non-Standard Libraries in to Databricks
-# For libraries that are not part of the standard distribution of Databricks, use the dbutils.library methods
-#dbutils.library.installPyPI("pandas")
-#dbutils.library.installPyPI("numpy")
-#dbutils.library.restartPython()
-
-# COMMAND ----------
-
 # DBTITLE 1,Import PySpark Modules
 import pyspark.sql.functions as F
 from pyspark.sql.types import *
@@ -44,16 +36,7 @@ final_struc = StructType(fields = data_schema)
 # COMMAND ----------
 
 gdeltFeb = sqlContext.createDataFrame(bq_gdelt.rdd, final_struc)
-gdeltFeb.limit(10).toPandas()
-
-# COMMAND ----------
-
-# DBTITLE 1,Convert String Date Columns to Datetimes
-# This function converts the string cell into a date:
-func =  F.udf (lambda x: datetime.strptime(x, 'yyyyMMddHHmmss'), DateType())
-gdeltFeb1 = gdeltFeb.withColumn('EventTimeDate', func(F.col('EventTimeDate')))
-gdeltFebDates = gdeltFeb1.withColumn('MentionTimeDate', func(F.col('MentionTimeDate')))
-gdeltFebDates.printSchema()
+gdeltFeb.limit(5).toPandas()
 
 # COMMAND ----------
 
@@ -62,35 +45,112 @@ gdeltFeb.select("GLOBALEVENTID","EventTimeDate","MentionTimeDate", "Confidence",
 
 # COMMAND ----------
 
-# DBTITLE 1,Assess Null Values
-result2 = spark.sql(
-  """
-  SELECT 
-    education,
-    ROUND( AVG( if(LTRIM(marital_status) = 'Never-married',1,0) ), 2) as bachelor_rate
-  FROM 
-    adult 
-  GROUP BY education
-  ORDER BY bachelor_rate DESC
-  """)
+# DBTITLE 1,Replace Obvious, Irregular Values with Nulls
+# Create noneType function
+null_func = F.udf(lambda value: F.when( value != '--', value).otherwise(lit(None)))
 
-# register the df we just made as a table for spark sql named a table -> "result2" 
-sqlContext.registerDataFrameAsTable(result2, "result2")
-spark.sql("SELECT * FROM result2").show(1)
+# Apply to columns with Irregular Values
+gdeltFeb = gdeltFeb.withColumn("EventRootCode", null_func(gdeltFeb.EventRootCode))
 
-
-
-
-
-gdeltFebNulls = gdeltFeb.filter(gdeltFeb.GLOBALEVENTID.isNull() | gdeltFeb.EventTimeDate.isNull() | gdeltFeb.MentionTimeDate.isNull() | 
-                                gdeltFeb.Confidence.isNull() | gdeltFeb.MentionDocTone.isNull() | gdeltFeb.EventRootCode.isNull() | 
-                                gdeltFeb.QuadClass.isNull() | gdeltFeb.GoldsteinScale.isNull() )
-gdeltFebNulls.describe()
+# Confirm output
+gdeltFeb.select("GLOBALEVENTID","EventTimeDate","MentionTimeDate", "Confidence", "MentionDocTone", "EventRootCode", "QuadClass", "GoldsteinScale").describe().show()
 
 # COMMAND ----------
 
 # DBTITLE 1,Assess Null Values
-gdeltFebNulls = gdeltFeb.na.drop(subset=["GLOBALEVENTID","EventTimeDate","MentionTimeDate", "Confidence", "MentionDocTone", "EventRootCode", "QuadClass", "GoldsteinScale"])
+def count_missings(spark_df, sort=True):
+    """
+    Counts number of nulls and nans in each column
+    """
+    df = spark_df.select([F.count(F.when(F.isnan(c) | F.isnull(c), c)).alias(c) for (c,c_type) in spark_df.dtypes if c_type not in ('timestamp', 'string', 'date')]).toPandas()
+
+    if len(df) == 0:
+        print("There are no any missing values!")
+        return None
+
+    if sort:
+        return df.rename(index={0: 'count'}).T.sort_values("count",ascending=False)
+
+    return df
+
+# COMMAND ----------
+
+# Non String Values
+count_missings(gdeltFeb)
+
+# COMMAND ----------
+
+# String Values
+count_missings(gdeltFeb)
+
+# COMMAND ----------
+
+# DBTITLE 1,Drop Rows with Nulls in Key Columns (add all in list as a precaution)
+gdeltFebNoNulls = gdeltFeb.na.drop(subset=["GLOBALEVENTID","EventTimeDate","MentionTimeDate", "Confidence", "MentionDocTone", "EventRootCode", "QuadClass", "GoldsteinScale"])
+
+# Verify output
+count_missings(gdeltFebNoNulls)
+
+# COMMAND ----------
+
+# DBTITLE 1,Convert String Date to Datetime Columns and Replace Null Values
+# Create function to convert string cells to datetimes
+date_func =  F.udf (lambda x: datetime.strptime(x, 'yyyyMMddHHmmss'), DateType())
+
+
+gdeltFeb\
+.withColumn('EventTimeDate-formatted', F.when((gdeltFeb.EventTimeDate.isNull() | (gdeltFeb.EventTimeDate == '')) ,'0')\
+.otherwise(date_func(F.col('EventTimeDate'))))\
+.withColumn('MentionTimeDate-formatted', F.when((gdeltFeb.MentionTimeDate.isNull() | (gdeltFeb.MentionTimeDate == '')) ,'0')\
+.otherwise(date_func(F.col('MentionTimeDate'))))\
+.drop('EventTimeDate','MentionTimeDate')\
+.show()
+
+# COMMAND ----------
+
+# DBTITLE 1,Convert String Date Columns to Datetimes
+# Create function to convert string cells to datetimes
+date_func =  F.udf (lambda x: datetime.strptime(x, 'yyyyMMddHHmmss'), DateType())
+
+# Apply to date columns
+gdeltFeb = gdeltFeb.withColumn('EventTimeDate', date_func(F.col('EventTimeDate')))
+gdeltFeb = gdeltFeb.withColumn('MentionTimeDate', date_func(F.col('MentionTimeDate')))
+gdeltFeb.printSchema()
+
+# COMMAND ----------
+
+# DBTITLE 1,Convert 2 Lists to Dictionary
+from itertools import chain
+dict_func = F.udf (lambda keys, vals: dict(zip(keys, vals)))
+
+mapping_expr = F.udf (lambda mapping: F.create_map([F.lit(x) for x in F.chain(*mapping.items())]))
+
+
+
+def get_dictionary(l1, l2):
+    """
+    Create Column for Strings Associated with Code Column
+    
+    :param df: dataframe of cleaned data
+    :param codes_col: name of the code column in dataframe
+    :return: dict
+    """
+    
+    assert len(df[codes_col].unique()) == len(strings), "Length of codes and strings list are not equal"
+    
+    # Convert lists to dictionary 
+    codes = df[codes_col].sort_values(ascending=True).unique()
+    code_dict = {codes[i]: strings[i] for i in range(len(codes))}
+    
+    # Add column for code strings
+    codes_string_col = codes_col+'String'
+    df[codes_string_col] = df[codes_col].map(code_dict)
+
+    # verify output
+    verify_df = df[[codes_col, codes_string_col]].sort_values(by=codes_col, ascending=True).drop_duplicates()
+
+    # return df and verified output
+    return df, verify_df
 
 # COMMAND ----------
 
@@ -126,6 +186,13 @@ def get_code_strings(df, codes_col: str, strings: list):
 
 # COMMAND ----------
 
+import pandas as pd
+df = spark.createDataFrame(pd.DataFrame({'integers': [1,2,3,4,5]}))
+strings = [1,2,3,4,5]
+F.length(df.select(F.countDistinct('integers'))) == F.lenght(strings)
+
+# COMMAND ----------
+
 # DBTITLE 1,Select Mentions within first 60 Days of an Event
 # Calculate days between
 #bq_gdeltFebDaysBetween = bq_gdelt.withColumn('DaysBetween', bq_gdelt.select(F.col("MentionTimeDate")-F.col("EventTimeDate")))
@@ -158,16 +225,23 @@ cleaned_merged_df.head(1)
 # COMMAND ----------
 
 # DBTITLE 1,Create Cameo Code Root Integer Values with Associated String
+# Convert column to integer
+new_column_udf = udf(lambda name: None if name == 0 else name, StringType())
+gdeltFeb = gdeltFeb.withColumn("EventRootCode", new_column_udf(gdeltFeb.EventRootCode))
+cameo_codes = gdeltFeb.select('EventRootCode').distinct().rdd.map(lambda r: r[0]).collect()
+print(cameo_codes)
+
+# COMMAND ----------
+
+# DBTITLE 1,Create Cameo Code Root Integer Values with Associated String
 cameo_verbs = ['MAKE PUBLIC STATEMENT','APPEAL','EXPRESS INTENT TO COOPERATE','CONSULT',
               'ENGAGE IN DIPLOMATIC COOPERATION','ENGAGE IN MATERIAL COOPERATION','PROVIDE AID',
                'YIELD','INVESTIGATE','DEMAND','DISAPPROVE','REJECT','THREATEN','PROTEST',
                'EXHIBIT MILITARY POSTURE','REDUCE RELATIONS','COERCE','ASSAULT','FIGHT',
                'ENGAGE IN UNCONVENTIONAL MASS VIOLENCE']
 print(cameo_verbs)
-
-# Add string column
-cleaned_merged_df, cameo_code_df = get_code_strings(cleaned_merged_df, 'EventRootCode', cameo_verbs)
-cameo_code_df
+cameo_codes = gdeltFeb.select('EventRootCode').distinct().rdd.map(lambda r: r[0]).collect()
+print(cameo_codes)
 
 # COMMAND ----------
 
