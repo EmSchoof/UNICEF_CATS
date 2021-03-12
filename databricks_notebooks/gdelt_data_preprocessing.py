@@ -214,14 +214,45 @@ gdeltFebNoNulls60D.limit(1).toPandas()
 
 # DBTITLE 1,Create Country Code Integer Values with Country Names
 # get country data
-country_codes_df = pd.DataFrame(pd.read_csv('../select_data/data/countries.csv', encoding= 'unicode_escape'))
+file_location = "/FileStore/tables/countries.csv"
+file_type = "csv"
 
-# convert lists to dictionary 
-country_code_dict = {country_codes_df['alpha-2'][i]: country_codes_df['name'][i] for i in range(len(country_codes_df))}
+# CSV options
+infer_schema = "true"
+first_row_is_header = "true"
+delimiter = ","
 
-# Add column for cameo code root strings (verbs)
-cleaned_merged_df['ActionGeo_FullName'] = cleaned_merged_df['ActionGeo_CountryCode'].map(country_code_dict)
-cleaned_merged_df.head()
+# The applied options are for CSV files. For other file types, these will be ignored. #.option("sep", delimiter) 
+country_codes_df = spark.read.format("csv") \
+  .option("inferSchema", infer_schema) \
+  .option("header", first_row_is_header) \
+  .option("sep", delimiter) \
+  .option("encoding", "ISO-8859-1") \
+  .load("/FileStore/tables/countries.csv")
+
+# Replace \x81 with an empty string
+country_codes_df = country_codes_df.withColumn('name', F.regexp_replace('name', '\x81Aland Islands', 'Aland Islands'))  
+country_codes_df.limit(5).toPandas()
+
+# COMMAND ----------
+
+# Create Country Name and Country IOS2 Code Lists
+country_names = country_codes_df.select('name').rdd.flatMap(lambda x: x).collect()
+country_ios2 = country_codes_df.select('alpha-2').rdd.flatMap(lambda x: x).collect()
+
+# Create 2-Digit Country Code: Country Name dictionary
+country_ios2_dict = dict(zip(country_ios2, country_names))
+country_ios2_dict
+
+# COMMAND ----------
+
+# Map dictionary over df to create string column
+mapping_expr = F.create_map([F.lit(x) for x in chain(*country_ios2_dict.items())])
+test = gdeltFebNoNulls60D.withColumn('ActionGeo_FullName', mapping_expr[F.col('ActionGeo_CountryCode')])
+
+# Confirm accurate output
+test.select('ActionGeo_CountryCode', 'ActionGeo_FullName').dropDuplicates().sort(F.col('QuadClass')).show()
+test.limit(1).toPandas()
 
 # COMMAND ----------
 
