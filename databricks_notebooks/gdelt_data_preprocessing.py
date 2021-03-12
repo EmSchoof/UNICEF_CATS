@@ -145,14 +145,14 @@ gdeltFebNoNulls.limit(2).toPandas()
 
 # COMMAND ----------
 
-# DBTITLE 1,DATA REMOVAL (2): Select Mentions within first 60 Days of an Event
+# DBTITLE 1,DATA REMOVAL (2): Select Mentions within first 15 Days of an Event
 print('Removal of Nulls Dataframe: ', (gdeltFebNoNulls.count(), len(gdeltFebNoNulls.columns)))
 
 # Select Data Based on DaysBetween Column
-gdeltFebNoNulls60D = gdeltFebNoNulls.where(F.col('DaysBetween') <= 60)
+gdeltFebNoNullsSelectD = gdeltFebNoNulls.where(F.col('DaysBetween') <= 15)
 
 # Confirm output
-print('Mentions within 60days of Event Dataframe: ', (gdeltFebNoNulls60D.count(), len(gdeltFebNoNulls60D.columns)))
+print('Mentions within 15days of Event Dataframe: ', (gdeltFebNoNullsSelectD.count(), len(gdeltFebNoNullsSelectD.columns)))
 
 # COMMAND ----------
 
@@ -166,7 +166,7 @@ cameo_verbs = ['MAKE PUBLIC STATEMENT','APPEAL','EXPRESS INTENT TO COOPERATE','C
 print(cameo_verbs)
 
 # Create distinct list of CAMEO EventRootCodes
-cameo_codes = gdeltFebNoNulls60D.select('EventRootCode').distinct().rdd.map(lambda r: r[0]).collect()
+cameo_codes = gdeltFebNoNullsSelectD.select('EventRootCode').distinct().rdd.map(lambda r: r[0]).collect()
 cameo_codes_ordered = sorted(cameo_codes)
 print(cameo_codes_ordered)
 
@@ -178,11 +178,11 @@ cameo_verbs_dict
 
 # Map dictionary over df to create string column
 mapping_expr = F.create_map([F.lit(x) for x in chain(*cameo_verbs_dict.items())])
-gdeltFebNoNulls60D = gdeltFebNoNulls60D.withColumn('EventRootCodeString', mapping_expr[F.col('EventRootCode')])
+gdeltFebNoNullsSelectD = gdeltFebNoNullsSelectD.withColumn('EventRootCodeString', mapping_expr[F.col('EventRootCode')])
 
 # Confirm accurate output
-gdeltFebNoNulls60D.select('EventRootCode', 'EventRootCodeString').dropDuplicates().sort(F.col('EventRootCode')).show()
-gdeltFebNoNulls60D.limit(1).toPandas()
+gdeltFebNoNullsSelectD.select('EventRootCode', 'EventRootCodeString').dropDuplicates().sort(F.col('EventRootCode')).show()
+gdeltFebNoNullsSelectD.limit(1).toPandas()
 
 # COMMAND ----------
 
@@ -192,7 +192,7 @@ cameo_quadclass = ['Verbal Cooperation','Material Cooperation','Verbal Conflict'
 print(cameo_quadclass)
 
 # Create distinct list of CAMEO QuadClass codes
-cameo_quadclass_codes = gdeltFebNoNulls60D.select('QuadClass').distinct().rdd.map(lambda r: r[0]).collect()
+cameo_quadclass_codes = gdeltFebNoNullsSelectD.select('QuadClass').distinct().rdd.map(lambda r: r[0]).collect()
 cameo_quadclass_codes_ordered = sorted(cameo_quadclass_codes)
 print(cameo_quadclass_codes_ordered)
 
@@ -204,68 +204,74 @@ cameo_quadclass_dict
 
 # Map dictionary over df to create string column
 mapping_expr = F.create_map([F.lit(x) for x in chain(*cameo_quadclass_dict.items())])
-gdeltFebNoNulls60D = gdeltFebNoNulls60D.withColumn('QuadClassString', mapping_expr[F.col('QuadClass')])
+gdeltFebNoNullsSelectD = gdeltFebNoNullsSelectD.withColumn('QuadClassString', mapping_expr[F.col('QuadClass')])
 
 # Confirm accurate output
-gdeltFebNoNulls60D.select('QuadClass', 'QuadClassString').dropDuplicates().sort(F.col('QuadClass')).show()
-gdeltFebNoNulls60D.limit(1).toPandas()
+gdeltFebNoNullsSelectD.select('QuadClass', 'QuadClassString').dropDuplicates().sort(F.col('QuadClass')).show()
+gdeltFebNoNullsSelectD.limit(1).toPandas()
 
 # COMMAND ----------
 
 # DBTITLE 1,Create Country Code Integer Values with Country Names
-# get country data
-file_location = "/FileStore/tables/countries.csv"
-file_type = "csv"
-
 # CSV options
 infer_schema = "true"
 first_row_is_header = "true"
 delimiter = ","
 
-# The applied options are for CSV files. For other file types, these will be ignored. #.option("sep", delimiter) 
+# The applied options are for CSV files.  
 country_codes_df = spark.read.format("csv") \
   .option("inferSchema", infer_schema) \
   .option("header", first_row_is_header) \
   .option("sep", delimiter) \
-  .option("encoding", "ISO-8859-1") \
-  .load("/FileStore/tables/countries.csv")
+  .load("/Filestore/tables/countries.csv")
 
 # Replace \x81 with an empty string
-country_codes_df = country_codes_df.withColumn('name', F.regexp_replace('name', '\x81Aland Islands', 'Aland Islands'))  
+#country_codes_df = country_codes_df.withColumn('name', F.regexp_replace('name', '\x81Aland Islands', 'Aland Islands'))  
 country_codes_df.limit(5).toPandas()
 
 # COMMAND ----------
 
-# Create Country Name and Country IOS2 Code Lists
-country_names = country_codes_df.select('name').rdd.flatMap(lambda x: x).collect()
-country_ios2 = country_codes_df.select('alpha-2').rdd.flatMap(lambda x: x).collect()
+# Create Country Name and Country FIPS 10-4 Code Lists
+country_names = country_codes_df.select('Country name').rdd.flatMap(lambda x: x).collect()
+country_fips104 = country_codes_df.select('FIPS 10-4').rdd.flatMap(lambda x: x).collect()
 
 # Create 2-Digit Country Code: Country Name dictionary
-country_ios2_dict = dict(zip(country_ios2, country_names))
-country_ios2_dict
+country_fips104_dict = dict(zip(country_fips104, country_names))
+country_fips104_dict
 
 # COMMAND ----------
 
 # Map dictionary over df to create string column
-mapping_expr = F.create_map([F.lit(x) for x in chain(*country_ios2_dict.items())])
-test = gdeltFebNoNulls60D.withColumn('ActionGeo_FullName', mapping_expr[F.col('ActionGeo_CountryCode')])
+mapping_expr = F.create_map([F.lit(x) for x in chain(*country_fips104_dict.items())])
+gdeltFebNoNullsSelectD = gdeltFebNoNullsSelectD.withColumn('ActionGeo_FullName', mapping_expr[F.col('ActionGeo_CountryCode')])
 
 # Confirm accurate output
-test.select('ActionGeo_CountryCode', 'ActionGeo_FullName').dropDuplicates().sort(F.col('QuadClass')).show()
-test.limit(1).toPandas()
+gdeltFebNoNullsSelectD.select('ActionGeo_CountryCode', 'ActionGeo_FullName').dropDuplicates().sort(F.col('ActionGeo_FullName')).show()
+gdeltFebNoNullsSelectD.limit(1).toPandas()
 
 # COMMAND ----------
 
-# DBTITLE 0,Plot Incidences by Country
-# verify output
-cameo_country_df = cleaned_merged_df[['ActionGeo_CountryCode', 'ActionGeo_FullName']].sort_values(by='ActionGeo_CountryCode',
-                                                                                ascending=True).drop_duplicates()
-cameo_country_df.head(50)
+# DBTITLE 1,Import Python Plotting Modules
+import matplotlib.pyplot as plt
+plt.style.use('ggplot')
 
 # COMMAND ----------
 
-# DBTITLE 1,Verify Cleaned-Data Output
-# Select Desired Columns for Data Factory Output
-cleaned_merged_df = cleaned_merged_df[desired_columns]
-print('Cleaned Data with Desired Columns: ',cleaned_merged_df.shape)
-cleaned_merged_df.head()
+# DBTITLE 1,Visualize Events by Country
+# create a grouped dataframe
+gdeltPandas_df = gdeltFebNoNullsSelectD.select('GLOBALEVENTID', 'ActionGeo_FullName').groupby('ActionGeo_FullName').agg(F.countDistinct('GLOBALEVENTID')).alias('numEvents').toPandas()
+gdeltPandas_df.head()
+
+# COMMAND ----------
+
+gdeltPandas_df.dtypes
+
+# COMMAND ----------
+
+# display the plot
+myplot = gdeltPandas_df.plot(kind='barh', y='count(GLOBALEVENTID)', x='ActionGeo_FullName')
+display(myplot.figure)
+
+# COMMAND ----------
+
+# DBTITLE 1,Verify that the Output DataFrame is Unique on Source
