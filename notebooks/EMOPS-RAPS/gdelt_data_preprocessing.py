@@ -251,32 +251,7 @@ gdeltFebNoNullsSelectD.limit(1).toPandas()
 
 # COMMAND ----------
 
-# DBTITLE 1,Import Python Plotting Modules
-import matplotlib.pyplot as plt
-plt.style.use('ggplot')
-
-# COMMAND ----------
-
-# DBTITLE 1,Visualize Events by Country
-# create a grouped dataframe
-gdeltPandas_df = gdeltFebNoNullsSelectD.select('GLOBALEVENTID', 'ActionGeo_FullName').groupby('ActionGeo_FullName').agg(F.countDistinct('GLOBALEVENTID')).alias('numEvents').toPandas()
-gdeltPandas_df.head()
-
-# COMMAND ----------
-
-gdeltPandas_df.dtypes
-
-# COMMAND ----------
-
-# display the plot
-#plt.figure(figsize=(100,20))
-#myplot = gdeltPandas_df.plot(kind='barh', y='count(GLOBALEVENTID)', x='ActionGeo_FullName')
-#display(myplot.figure)
-gdeltFebNoNullsSelectD.columns
-
-# COMMAND ----------
-
-# DBTITLE 1,Save Select Columns of DataFrame as CSV
+# DBTITLE 1,Count Unique Global Events
 # select specific columns
 select_columns = ['GLOBALEVENTID',
                  'EventTimeDate',
@@ -291,5 +266,22 @@ select_columns = ['GLOBALEVENTID',
                  'ActionGeo_Long'
                  ]
 
-# save as CSV
-gdeltFebNoNullsSelectD.select(select_columns).write.format('csv').option('header',True).mode('overwrite').option('sep',',').save('/Filestore/tables/tmp/gdelt/preprocessed.csv')
+
+preprocessedGDELT = gdeltFebNoNullsSelectD.select(select_columns)
+print((preprocessedGDELT.count(), len(preprocessedGDELT.columns)))
+preprocessedGDELT.agg(F.countDistinct(F.col("GLOBALEVENTID")).alias("nEvents")).show()
+
+# COMMAND ----------
+
+# DBTITLE 1,Create Target Variable Columns
+gbcolumns = ['GLOBALEVENTID','EventTimeDate','ActionGeo_FullName','QuadClassString','EventRootCodeString','ActionGeo_Lat','ActionGeo_Long']
+groupedCountryEvents = preprocessedGDELT.groupBy(gbcolumns).avg()
+groupedCountryEventselect = groupedCountryEvents.select('GLOBALEVENTID','EventTimeDate','ActionGeo_FullName','QuadClassString','EventRootCodeString',
+                                                        'avg(Confidence)','avg(MentionDocTone)','avg(GoldsteinScale)','ActionGeo_Lat','ActionGeo_Long')
+print((groupedCountryEventselect.count(), len(groupedCountryEventselect.columns)))
+groupedCountryEventselect.limit(5).toPandas()
+
+# COMMAND ----------
+
+# DBTITLE 1,Save DataFrame as CSV
+groupedCountryEventselect.write.format('csv').option('header',True).mode('overwrite').option('sep',',').save('/Filestore/tables/tmp/gdelt/preprocessed.csv')
