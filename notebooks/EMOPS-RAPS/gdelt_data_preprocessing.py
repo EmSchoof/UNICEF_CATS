@@ -312,6 +312,36 @@ unknownCountries.show()
 
 # COMMAND ----------
 
+# MAGIC %md
+# MAGIC 
+# MAGIC After looking at a couple of investigative queries in BigQuery of the GDELT Events data, it appears that 'OC' relates to larger oceans, (Atlantic, Artic, Pacific, and Indian), while 'OS' refers to Oceans (general). Since, without the imported Action Geo Country name to further specific which ocean is referenced by either FIPS code, the rows with these FIPS codes lacking the lat/long for the Event will be dropped.
+
+# COMMAND ----------
+
+# DBTITLE 1,Date Removal (3): Add Ocean FIPS Code Strings and Drop Ocean Rows w/o Coordinates
+gdeltFebNoNullsSelectDFIPS = gdeltFebNoNullsSelectDFIPS.withColumn(
+    'ActionGeo_FullName',
+    F.when(F.col('ActionGeo_CountryCode') == 'OC', "Oceans, (Atlantic, Artic, Pacific, or Indian)")
+    .when(F.col('ActionGeo_CountryCode') == 'OC', "Oceans, (general)")  
+    .otherwise(F.col('ActionGeo_FullName'))
+)
+
+# verify output
+nullCountriesOceans = gdeltFebNoNullsSelectDFIPS.select('ActionGeo_CountryCode', 'ActionGeo_FullName').dropDuplicates().sort(F.col('ActionGeo_FullName')).where(F.col('ActionGeo_FullName').isNull())
+print(nullCountriesOceans.count())
+nullCountriesOceans.show()
+
+# COMMAND ----------
+
+# drop rows where Ocean FIPS codes are present without Event coordinates
+t = gdeltFebNoNullsSelectDFIPS.where( F.when(F.col('ActionGeo_CountryCode').isin('OC', 'OS')), F.col('ActionGeo_Lat').isNotNull() | F.col('ActionGeo_Long').isNotNull())
+
+# verify output
+print('Removal of Nulls Dataframe: ', (t.count(), len(t.columns)))
+count_missings(t)
+
+# COMMAND ----------
+
 # DBTITLE 1,Verify NoNulls in Target Variables
 print('Removal of Nulls Dataframe: ', (gdeltFebNoNullsSelectD.count(), len(gdeltFebNoNullsSelectD.columns)))
 count_missings(gdeltFebNoNullsSelectD)
