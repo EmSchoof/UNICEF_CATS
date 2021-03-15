@@ -264,9 +264,11 @@ gdeltFebNoNullsSelectD.limit(1).toPandas()
 
 # COMMAND ----------
 
+# DBTITLE 1,Assess Remaining Null Values for Country Name
 # Assess Nulls in Country Name Strings
-nullCountries = gdeltFebNoNullsSelectD.select('ActionGeo_CountryCode', 'ActionGeo_FullName').dropDuplicates().sort(F.col('ActionGeo_FullName')).where(F.col('ActionGeo_FullName').isNull()).show()
+nullCountries = gdeltFebNoNullsSelectD.select('ActionGeo_CountryCode', 'ActionGeo_FullName').dropDuplicates().sort(F.col('ActionGeo_FullName')).where(F.col('ActionGeo_FullName').isNull())
 print(nullCountries.count())
+nullCountries.show()
 
 # COMMAND ----------
 
@@ -277,22 +279,36 @@ print(nullCountries.count())
 
 # COMMAND ----------
 
-# DBTITLE 1,Assess Depreciated FIPS 10-4 country codes
-t = gdeltFebNoNullsSelectD.withColumn(
-    'EventCode',
-    F.when(
-        (F.col('ActionGeo_CountryCode') == 'YI',
-        "Serbia and Montenegro"),
-        (F.col('ActionGeo_CountryCode') == 'PF',
-        ""),
-      
-    ).otherwise(F.col('EventCode')).cast('int')
+# DBTITLE 1,Replace Missing FIPS 10-4 Country Code Names
+gdeltFebNoNullsSelectDFIPS = gdeltFebNoNullsSelectD.withColumn(
+    'ActionGeo_FullName',
+    F.when(F.col('ActionGeo_CountryCode') == 'YI', "Serbia and Montenegro")
+    .when(F.col('ActionGeo_CountryCode') == 'PF', "Paracel Islands")
+    .when(F.col('ActionGeo_CountryCode') == 'NT', "Netherlands Antilles")
+    .when(F.col('ActionGeo_CountryCode') == 'PG', "Spratly Islands")
+    .when(F.col('ActionGeo_CountryCode') == 'GZ', "Gaza Strip")
+    .when(F.col('ActionGeo_CountryCode') == 'RB', "Serbia")
+    .when(F.col('ActionGeo_CountryCode') == 'WQ', "Wake Island")
+    .when(F.col('ActionGeo_CountryCode') == 'KV', "Kosovo")
+    .when(F.col('ActionGeo_CountryCode') == 'DA', "Denmark")
+    .when(F.col('ActionGeo_CountryCode') == 'UP', "Ukraine")
+    .when(F.col('ActionGeo_CountryCode') == 'HQ', "Howland Island")
+    .when(F.col('ActionGeo_CountryCode') == 'VM', "Vietnam")    
+    .otherwise(F.col('ActionGeo_FullName'))
 )
-
 
 # COMMAND ----------
 
+# verify output
+nullCountries = gdeltFebNoNullsSelectDFIPS.select('ActionGeo_CountryCode', 'ActionGeo_FullName').dropDuplicates().sort(F.col('ActionGeo_FullName')).where(F.col('ActionGeo_FullName').isNull())
+print(nullCountries.count())
+nullCountries.show()
 
+# COMMAND ----------
+
+# DBTITLE 1,Assess Countries Associated with OC and OS Country Codes
+unknownCountries = gdeltFebNoNullsSelectDFIPS.select('ActionGeo_CountryCode', 'ActionGeo_FullName').dropDuplicates().sort(F.col('ActionGeo_CountryCode')).where(F.col('ActionGeo_CountryCode').isin('OC','OS'))
+unknownCountries.show()
 
 # COMMAND ----------
 
