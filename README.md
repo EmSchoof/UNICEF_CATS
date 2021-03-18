@@ -10,4 +10,4 @@ Contextual Alert and Trend System (CATS) is a proof of concept (POC) for an auto
 ![CATS LUCID CHART](images/CATS_technical_plan_flowchart.png)
 
 ### Data Selection and Preprocessing Workflow
-![CATS PREPROCESSING LUCID CHART](images/CATS_Data_Preprocessing.png)
+![CATS PREPROCESSING LUCID CHART](images/CATS_data_preprocessing_flowchart.png)
