@@ -111,14 +111,20 @@ count_missings(gdeltFeb)
 
 # DBTITLE 1,DATA REMOVAL (1):  Drop Rows with Nulls in Key Columns (add all in list as a precaution)
 print('Original Dataframe: ', (gdeltFeb.count(), len(gdeltFeb.columns)))
-gdeltFebNoNulls = gdeltFeb.na.drop(subset=["GLOBALEVENTID","EventTimeDate","MentionTimeDate", "Confidence", "MentionDocTone", "EventRootCode", "QuadClass", "GoldsteinScale"])
 
-# Verify output
+# drop Nulls in Integer Columns
+gdeltFebNoNulls1 = gdeltFeb.na.drop(subset=["GLOBALEVENTID","EventTimeDate","MentionTimeDate", "ActionGeo_CountryCode", "Confidence", "MentionDocTone", "EventRootCode", "QuadClass", "GoldsteinScale"])
+
+# drop Nulls in string columns
+gdeltFebNoNulls = gdeltFebNoNulls1.where(F.col('ActionGeo_CountryCode').isNotNull())
+
+# verify output
 print('Removal of Nulls Dataframe: ', (gdeltFebNoNulls.count(), len(gdeltFebNoNulls.columns)))
 count_missings(gdeltFebNoNulls)
 
 # COMMAND ----------
 
+gdeltFebNoNulls.printSchema()
 gdeltFebNoNulls.limit(5).toPandas()
 
 # COMMAND ----------
@@ -153,6 +159,13 @@ gdeltFebNoNullsSelectD = gdeltFebNoNulls.where(F.col('DaysBetween') <= 15)
 
 # Confirm output
 print('Mentions within 15days of Event Dataframe: ', (gdeltFebNoNullsSelectD.count(), len(gdeltFebNoNullsSelectD.columns)))
+
+# COMMAND ----------
+
+# DBTITLE 1,Assess Remaining Event Dates
+datesDF = gdeltFebNoNullsSelectD.select('EventTimeDate')
+min_date, max_date = datesDF.select(F.min('EventTimeDate'),F.max('EventTimeDate')).first()
+min_date, max_date
 
 # COMMAND ----------
 
@@ -246,8 +259,96 @@ mapping_expr = F.create_map([F.lit(x) for x in chain(*country_fips104_dict.items
 gdeltFebNoNullsSelectD = gdeltFebNoNullsSelectD.withColumn('ActionGeo_FullName', mapping_expr[F.col('ActionGeo_CountryCode')])
 
 # Confirm accurate output
-gdeltFebNoNullsSelectD.select('ActionGeo_CountryCode', 'ActionGeo_FullName').dropDuplicates().sort(F.col('ActionGeo_FullName')).show()
+print(gdeltFebNoNullsSelectD.select('ActionGeo_CountryCode', 'ActionGeo_FullName').dropDuplicates().sort(F.col('ActionGeo_FullName')).count())
 gdeltFebNoNullsSelectD.limit(1).toPandas()
+
+# COMMAND ----------
+
+# DBTITLE 1,Assess Remaining Null Values for Country Name
+# Assess Nulls in Country Name Strings
+nullCountries = gdeltFebNoNullsSelectD.select('ActionGeo_CountryCode', 'ActionGeo_FullName').dropDuplicates().sort(F.col('ActionGeo_FullName')).where(F.col('ActionGeo_FullName').isNull())
+print(nullCountries.count())
+nullCountries.show()
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC With the incidence of the country code, 'YI', it appears that GDELT uses the *depreciated* version of FIPS 10-4
+# MAGIC 
+# MAGIC "YI - Serbia and Montenegro (deprecated FIPS 10-4 country code, now RB (Serbia) and MJ (Montenegro))"
+
+# COMMAND ----------
+
+# DBTITLE 1,Replace Missing FIPS 10-4 Country Code Names
+gdeltFebNoNullsSelectDFIPS = gdeltFebNoNullsSelectD.withColumn(
+    'ActionGeo_FullName',
+    F.when(F.col('ActionGeo_CountryCode') == 'YI', "Serbia and Montenegro")
+    .when(F.col('ActionGeo_CountryCode') == 'PF', "Paracel Islands")
+    .when(F.col('ActionGeo_CountryCode') == 'NT', "Netherlands Antilles")
+    .when(F.col('ActionGeo_CountryCode') == 'PG', "Spratly Islands")
+    .when(F.col('ActionGeo_CountryCode') == 'GZ', "Gaza Strip")
+    .when(F.col('ActionGeo_CountryCode') == 'RB', "Serbia")
+    .when(F.col('ActionGeo_CountryCode') == 'WQ', "Wake Island")
+    .when(F.col('ActionGeo_CountryCode') == 'KV', "Kosovo")
+    .when(F.col('ActionGeo_CountryCode') == 'DA', "Denmark")
+    .when(F.col('ActionGeo_CountryCode') == 'UP', "Ukraine")
+    .when(F.col('ActionGeo_CountryCode') == 'HQ', "Howland Island")
+    .when(F.col('ActionGeo_CountryCode') == 'VM', "Vietnam")    
+    .otherwise(F.col('ActionGeo_FullName'))
+)
+
+# COMMAND ----------
+
+# verify output
+nullCountries = gdeltFebNoNullsSelectDFIPS.select('ActionGeo_CountryCode', 'ActionGeo_FullName').dropDuplicates().sort(F.col('ActionGeo_FullName')).where(F.col('ActionGeo_FullName').isNull())
+print(nullCountries.count())
+nullCountries.show()
+
+# COMMAND ----------
+
+# DBTITLE 1,Assess Countries Associated with OC and OS Country Codes
+unknownCountries = gdeltFebNoNullsSelectDFIPS.select('ActionGeo_CountryCode', 'ActionGeo_FullName').dropDuplicates().sort(F.col('ActionGeo_CountryCode')).where(F.col('ActionGeo_CountryCode').isin('OC','OS'))
+unknownCountries.show()
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC 
+# MAGIC After looking at a couple of investigative queries in BigQuery of the GDELT Events data, it appears that 'OC' relates to larger oceans, (Atlantic, Artic, Pacific, and Indian), while 'OS' refers to Oceans (general). Since, without the imported Action Geo Country name to further specific which ocean is referenced by either FIPS code, the rows with FIPS codes lacking the lat/long for the Event will be dropped.
+
+# COMMAND ----------
+
+# DBTITLE 1,Date Removal (3): Add Ocean FIPS Code Strings and Drop Rows w/o Coordinates
+gdeltFebNoNullsSelectDFIPSocean = gdeltFebNoNullsSelectDFIPS.withColumn(
+    'ActionGeo_FullName',
+    F.when(F.col('ActionGeo_CountryCode') == 'OC', "Oceans, (Atlantic, Artic, Pacific, or Indian)")
+    .when(F.col('ActionGeo_CountryCode') == 'OS', "Oceans, (general)")  
+    .otherwise(F.col('ActionGeo_FullName'))
+)
+
+# verify output
+nullCountriesOceans = gdeltFebNoNullsSelectDFIPSocean.select('ActionGeo_CountryCode', 'ActionGeo_FullName').dropDuplicates().sort(F.col('ActionGeo_FullName')).where(F.col('ActionGeo_FullName').isNull())
+print(nullCountriesOceans.count())
+nullCountriesOceans.show()
+
+# COMMAND ----------
+
+# DBTITLE 1,Verify NoNulls in Target Variables
+print('Original Dataframe: ', (gdeltFebNoNullsSelectDFIPSocean.count(), len(gdeltFebNoNullsSelectDFIPSocean.columns)))
+
+# drop rows where FIPS codes are present without Event coordinates
+gdeltPreprocessedData = gdeltFebNoNullsSelectDFIPSocean.na.drop(subset=['ActionGeo_Lat', 'ActionGeo_Long'])
+
+# verify output
+print('Removal of Nulls Dataframe: ', (gdeltPreprocessedData.count(), len(gdeltPreprocessedData.columns)))
+count_missings(gdeltPreprocessedData)
+
+# COMMAND ----------
+
+# DBTITLE 1,Assess Remaining Event Dates
+datesDF = gdeltPreprocessedData.select('EventTimeDate')
+min_date, max_date = datesDF.select(F.min('EventTimeDate'),F.max('EventTimeDate')).first()
+min_date, max_date
 
 # COMMAND ----------
 
@@ -267,21 +368,31 @@ select_columns = ['GLOBALEVENTID',
                  ]
 
 
-preprocessedGDELT = gdeltFebNoNullsSelectD.select(select_columns)
-print((preprocessedGDELT.count(), len(preprocessedGDELT.columns)))
-preprocessedGDELT.agg(F.countDistinct(F.col("GLOBALEVENTID")).alias("nEvents")).show()
+outputPreprocessedGDELT = gdeltPreprocessedData.select(select_columns)
+print((outputPreprocessedGDELT.count(), len(outputPreprocessedGDELT.columns)))
+outputPreprocessedGDELT = outputPreprocessedGDELT.withColumn("nArticles", F.lit(1))
+outputPreprocessedGDELT.agg(F.countDistinct(F.col("GLOBALEVENTID")).alias("nEvents")).show()
 
 # COMMAND ----------
 
-# DBTITLE 1,Create Target Variable Columns
-gbcolumns = ['GLOBALEVENTID','EventTimeDate','ActionGeo_FullName','QuadClassString','EventRootCodeString','ActionGeo_Lat','ActionGeo_Long']
-groupedCountryEvents = preprocessedGDELT.groupBy(gbcolumns).avg()
-groupedCountryEventselect = groupedCountryEvents.select('GLOBALEVENTID','EventTimeDate','ActionGeo_FullName','QuadClassString','EventRootCodeString',
-                                                        'avg(Confidence)','avg(MentionDocTone)','avg(GoldsteinScale)','ActionGeo_Lat','ActionGeo_Long')
-print((groupedCountryEventselect.count(), len(groupedCountryEventselect.columns)))
-groupedCountryEventselect.limit(5).toPandas()
+print(outputPreprocessedGDELT.columns)
+outputPreprocessedGDELT.limit(10).toPandas()
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC Create Target Variable Columns
+# MAGIC 
+# MAGIC - select specific columns for output
+# MAGIC gbcolumns = ['GLOBALEVENTID','EventTimeDate','ActionGeo_FullName','QuadClassString','EventRootCodeString','ActionGeo_Lat','ActionGeo_Long']
+# MAGIC 
+# MAGIC - group data based on desired output
+# MAGIC groupedCountryEvents = preprocessedGDELT.groupBy(gbcolumns).agg(F.avg('Confidence'),F.avg('MentionDocTone'),F.avg('GoldsteinScale'),F.sum('nArticles'))
+# MAGIC 
+# MAGIC - verify output
+# MAGIC groupedCountryEvents.limit(10).toPandas()
 
 # COMMAND ----------
 
 # DBTITLE 1,Save DataFrame as CSV
-groupedCountryEventselect.write.format('csv').option('header',True).mode('overwrite').option('sep',',').save('/Filestore/tables/tmp/gdelt/preprocessed.csv')
+outputPreprocessedGDELT.write.format('csv').option('header',True).mode('overwrite').option('sep',',').save('/Filestore/tables/tmp/gdelt/preprocessed.csv')
