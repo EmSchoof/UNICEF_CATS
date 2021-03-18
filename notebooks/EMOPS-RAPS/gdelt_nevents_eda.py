@@ -5,7 +5,7 @@
 # MAGIC - 	Event report value (ERV): 
 # MAGIC Calculated as the percentage of total articles categorized as belonging to a country that are categorized as matches for an event type
 # MAGIC -   Event report sum (ERS):
-# MAGIC Calculated as the number of articles categorized as belonging to a country that are categorized as matches for an event type
+# MAGIC <strike> Calculated as the number of articles categorized as belonging to a country that are categorized as matches for an event type </strike>
 # MAGIC -	Event Running Average 1 (ERA1):
 # MAGIC Calculated as the rolling average of the ERV for PA1 over the previous 12 months
 # MAGIC -	Event Running Average 2 (ERA2):
@@ -57,34 +57,45 @@ preprocessedGDELT.limit(10).toPandas()
 
 # COMMAND ----------
 
-# DBTITLE 1,Assess Number of Daily Articles by Country by EventRootCode
-nEventsDaily = preprocessedGDELT.select('ActionGeo_FullName','EventTimeDate','EventRootCodeString','QuadClassString','nArticles').groupBy('ActionGeo_FullName','EventTimeDate','EventRootCodeString', 'QuadClassString').sum().alias('nArticles')
+# DBTITLE 1,Select Only Conflict Events
+conflictEvents = preprocessedGDELT.filter(F.col('QuadClassString').isin('Verbal Conflict', 'Material Conflict'))
+print((conflictEvents.count(), len(conflictEvents.columns)))
+conflictEvents.limit(10).toPandas()
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC ### (1) Event report value (ERV)
+# MAGIC #### Calculated as the percentage of total articles categorized as belonging to a country that are categorized as matches for an event type
+
+# COMMAND ----------
+
+# DBTITLE 1,Create Column to Count Number of Daily Articles by Country by EventRootCode
+nEventsDaily = conflictEvents.select('ActionGeo_FullName','EventTimeDate','EventRootCodeString','nArticles').groupBy('ActionGeo_FullName','EventTimeDate','EventRootCodeString').agg(F.sum('nArticles').alias('nArticles')).sort(['EventTimeDate', 'ActionGeo_FullName'], ascending=True)
 print((nEventsDaily.count(), len(nEventsDaily.columns)))
-nEventsDaily.select('sum(nArticles)').describe().show()
+nEventsDaily.select('nArticles').describe().show()
 nEventsDaily.limit(10).toPandas()
 
 # COMMAND ----------
 
-def get_var_percentages(df, country_list, target_col, sort=False):
-  
-    """Get Percentage of Column Values in Target Column of Cleaned GDELT Data
-    :param df: dataframe of cleaned data
-    :param target_col: column name of variable of interest
-    :return: dataframe
-    """
-    
-    # select country data
+# DBTITLE 1,Calculate Event Report Value (ERV)
+# create a 'Window', country by date
+nArticles_window = Window.partitionBy('ActionGeo_FullName').orderBy('EventTimeDate')
 
-    # Create a sub-dataframe to group sum(nArticles) by Target Column
-    grouped_df = df.select('ActionGeo_FullName','EventTimeDate',target_col,'sum(nArticles)').groupBy('ActionGeo_FullName','EventTimeDate', target_col,).sum()
-    
-    # Get variable percentage                                                                
-    grouped_df['%'] = (grouped_df['sum(nArticles)'] / grouped_df['sum(nArticles)'].sum()) * 100
-    
-    if sort==True:
-        grouped_df = grouped_df.sort_values(by='%', ascending=False).reset_index()
-    
-    return grouped_df
+# get daily percent of articles for each Event Code string within 'Window'
+nEventsDaily = nEventsDaily.withColumn('EventReportValue', F.col('nArticles')/F.sum('nArticles').over(nArticles_window))
+nEventsDaily.limit(10).toPandas()
+
+# COMMAND ----------
+
+# verify output
+AFG_01feb2021 = nEventsDaily.filter((F.col('ActionGeo_FullName') == 'Afghanistan') & (F.col('EventTimeDate') == '2021-02-01'))
+print(AFG_01feb2021.select(F.sum('EventReportValue')).collect()[0][0])
+AFG_01feb2021.limit(20).toPandas()
+
+# COMMAND ----------
+
+display(AFG_01feb2021)
 
 # COMMAND ----------
 
