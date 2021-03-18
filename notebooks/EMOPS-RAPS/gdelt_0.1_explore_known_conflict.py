@@ -73,11 +73,15 @@ display(AFG)
 
 # COMMAND ----------
 
-
+display(AFG)
 
 # COMMAND ----------
 
+display(AFG)
 
+# COMMAND ----------
+
+display(AFG)
 
 # COMMAND ----------
 
@@ -96,7 +100,11 @@ display(MMR)
 
 # COMMAND ----------
 
+display(MMR)
 
+# COMMAND ----------
+
+display(MMR)
 
 # COMMAND ----------
 
