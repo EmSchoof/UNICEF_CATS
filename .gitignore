@@ -81,6 +81,9 @@ data/
 # Jupyter Notebook
 .ipynb_checkpoints
 
+# Duplicate folders
+databricks_notebooks
+
 # IPython
 profile_default/
 ipython_config.py
