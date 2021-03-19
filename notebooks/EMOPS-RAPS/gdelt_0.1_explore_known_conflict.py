@@ -6,7 +6,7 @@
 # MAGIC   - Factionalized Civil War
 # MAGIC   - Urban Conflict
 # MAGIC   - Environmental Drought
-# MAGIC - (2) **Muanmar**
+# MAGIC - (2) **Myanmar**
 # MAGIC   - Armed Conflict
 # MAGIC   - Protests and Civil Unrest
 # MAGIC - (3) **Somalia**
@@ -51,7 +51,7 @@ conflictEvents = preprocessedGDELT.filter(F.col('QuadClassString').isin('Verbal 
 print((conflictEvents.count(), len(conflictEvents.columns)))
 
 # filter on flagged countries from Horizan Scan
-conflictEventsHorizonCountries = conflictEvents.filter(F.col('ActionGeo_FullName').isin('Afghanistan','Guinea','Myanmar','Somalia')).drop_duplicates()
+conflictEventsHorizonCountries = conflictEvents.filter(F.col('ActionGeo_FullName').isin('Afghanistan','Guinea','Myanmar','Somalia'))
 print((conflictEventsHorizonCountries.count(), len(conflictEventsHorizonCountries.columns)))
 conflictEventsHorizonCountries.limit(10).toPandas()
 
@@ -75,7 +75,7 @@ display(conflictEventsHorizonCountries)
 
 # DBTITLE 0,Afghanistan
 AFG = conflictEventsHorizonCountries.filter((F.col('ActionGeo_FullName') == 'Afghanistan'))
-print('February Global CONFLICT Events in Afghanistan: ', AFG.count())
+print('February Global CONFLICT Events in Afghanistan: ', AFG.select('GLOBALEVENTID').distinct())
 AFG.limit(5).toPandas()
 display(AFG)
 
@@ -94,7 +94,7 @@ display(AFG)
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ### Muanmar
+# MAGIC ### Myanmar
 # MAGIC - Armed Conflict
 # MAGIC - Protests and Civil Unrest
 
@@ -102,7 +102,7 @@ display(AFG)
 
 # DBTITLE 0,Myanmar
 MMR = conflictEventsHorizonCountries.filter((F.col('ActionGeo_FullName') == 'Myanmar'))
-print('February Global CONFLICT Events in Myanmar: ', MMR.count())
+print('February Global CONFLICT Events in Myanmar: ', MMR.select('GLOBALEVENTID').distinct())
 MMR.limit(5).toPandas()
 display(MMR)
 
@@ -130,7 +130,7 @@ display(MMR)
 
 # DBTITLE 0,Somalia
 SOM = conflictEventsHorizonCountries.filter((F.col('ActionGeo_FullName') == 'Somalia'))
-print('February Global CONFLICT Events in Somalia: ', SOM.count())
+print('February Global CONFLICT Events in Somalia: ', SOM.select('GLOBALEVENTID').distinct())
 SOM.limit(5).toPandas()
 display(SOM)
 
@@ -156,8 +156,12 @@ display(SOM)
 
 # DBTITLE 1,Guinea
 GIN = conflictEventsHorizonCountries.filter((F.col('ActionGeo_FullName') == 'Somalia'))
-print('February Global CONFLICT Events in Guinea: ', GIN.count())
+print('February Global CONFLICT Events in Guinea: ', GIN.select('GLOBALEVENTID').distinct())
 GIN.limit(5).toPandas()
+display(GIN)
+
+# COMMAND ----------
+
 display(GIN)
 
 # COMMAND ----------
