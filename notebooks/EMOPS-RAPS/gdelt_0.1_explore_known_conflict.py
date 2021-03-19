@@ -57,6 +57,14 @@ conflictEventsHorizonCountries.limit(10).toPandas()
 
 # COMMAND ----------
 
+display(conflictEventsHorizonCountries)
+
+# COMMAND ----------
+
+display(conflictEventsHorizonCountries)
+
+# COMMAND ----------
+
 # MAGIC %md
 # MAGIC ### Afghanistan
 # MAGIC   - Factionalized Civil War
@@ -108,6 +116,10 @@ display(MMR)
 
 # COMMAND ----------
 
+display(MMR)
+
+# COMMAND ----------
+
 # MAGIC %md
 # MAGIC ### **Somalia**
 # MAGIC   - Non-State Armed Group Attacks
@@ -124,11 +136,15 @@ display(SOM)
 
 # COMMAND ----------
 
-
+display(SOM)
 
 # COMMAND ----------
 
+display(SOM)
 
+# COMMAND ----------
+
+display(SOM)
 
 # COMMAND ----------
 
@@ -146,7 +162,8 @@ display(GIN)
 
 # COMMAND ----------
 
-
+display(GIN)
 
 # COMMAND ----------
 
+display(GIN)
