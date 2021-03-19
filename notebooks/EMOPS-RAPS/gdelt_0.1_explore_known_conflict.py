@@ -73,10 +73,13 @@ display(conflictEventsHorizonCountries)
 
 # COMMAND ----------
 
-# DBTITLE 0,Afghanistan
 AFG = conflictEventsHorizonCountries.filter((F.col('ActionGeo_FullName') == 'Afghanistan'))
-print('February Global CONFLICT Events in Afghanistan: ', AFG.select('GLOBALEVENTID').distinct())
-AFG.limit(5).toPandas()
+print('February Global CONFLICT Events in Afghanistan: ', AFG.select('GLOBALEVENTID').distinct().count())
+AFG.limit(1).toPandas()
+
+# COMMAND ----------
+
+# DBTITLE 0,Afghanistan
 display(AFG)
 
 # COMMAND ----------
@@ -100,10 +103,13 @@ display(AFG)
 
 # COMMAND ----------
 
-# DBTITLE 0,Myanmar
 MMR = conflictEventsHorizonCountries.filter((F.col('ActionGeo_FullName') == 'Myanmar'))
-print('February Global CONFLICT Events in Myanmar: ', MMR.select('GLOBALEVENTID').distinct())
-MMR.limit(5).toPandas()
+print('February Global CONFLICT Events in Myanmar: ', MMR.select('GLOBALEVENTID').distinct().count())
+MMR.limit(1).toPandas()
+
+# COMMAND ----------
+
+# DBTITLE 0,Myanmar
 display(MMR)
 
 # COMMAND ----------
@@ -128,10 +134,13 @@ display(MMR)
 
 # COMMAND ----------
 
-# DBTITLE 0,Somalia
 SOM = conflictEventsHorizonCountries.filter((F.col('ActionGeo_FullName') == 'Somalia'))
-print('February Global CONFLICT Events in Somalia: ', SOM.select('GLOBALEVENTID').distinct())
-SOM.limit(5).toPandas()
+print('February Global CONFLICT Events in Somalia: ', SOM.select('GLOBALEVENTID').distinct().count())
+SOM.limit(1).toPandas()
+
+# COMMAND ----------
+
+# DBTITLE 0,Somalia
 display(SOM)
 
 # COMMAND ----------
@@ -154,10 +163,13 @@ display(SOM)
 
 # COMMAND ----------
 
-# DBTITLE 1,Guinea
 GIN = conflictEventsHorizonCountries.filter((F.col('ActionGeo_FullName') == 'Somalia'))
-print('February Global CONFLICT Events in Guinea: ', GIN.select('GLOBALEVENTID').distinct())
-GIN.limit(5).toPandas()
+print('February Global CONFLICT Events in Guinea: ', GIN.select('GLOBALEVENTID').distinct().count())
+GIN.limit(1).toPandas()
+
+# COMMAND ----------
+
+# DBTITLE 1,Guinea
 display(GIN)
 
 # COMMAND ----------
