@@ -163,7 +163,7 @@ display(SOM)
 
 # COMMAND ----------
 
-GIN = conflictEventsHorizonCountries.filter((F.col('ActionGeo_FullName') == 'Somalia'))
+GIN = conflictEventsHorizonCountries.filter((F.col('ActionGeo_FullName') == 'Guinea'))
 print('February Global CONFLICT Events in Guinea: ', GIN.select('GLOBALEVENTID').distinct().count())
 GIN.limit(1).toPandas()
 
@@ -183,3 +183,7 @@ display(GIN)
 # COMMAND ----------
 
 display(GIN)
+
+# COMMAND ----------
+
+GIN.limit(25).toPandas()
