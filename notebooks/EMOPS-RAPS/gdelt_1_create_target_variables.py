@@ -1,5 +1,10 @@
 # Databricks notebook source
 # MAGIC %md
+# MAGIC 
+# MAGIC ### Periods of Analysis
+# MAGIC - Period of Analysis 1 (PA1): 3 days
+# MAGIC - Period of Analysis 2 (PA2): 60 days 
+# MAGIC 
 # MAGIC ### Calculations – Percentages of Articles by Country by Event Type
 # MAGIC 
 # MAGIC - 	Event report value (ERV): 
@@ -10,8 +15,6 @@
 # MAGIC Calculated as the rolling average of the ERV for PA1 over the previous 12 months
 # MAGIC -	Event Running Average 2 (ERA2):
 # MAGIC Calculated as the rolling average of the ERV for PA2 over the previous 24 months
-# MAGIC -	Period of Analysis 1 (PA1): 3 days
-# MAGIC -	Period of Analysis 2 (PA2): 60 days 
 # MAGIC -	Event spike alert: 
 # MAGIC When the *Event Report Value* for a given PA1 (*3 DAYS*) is one standard deviation above ERA1* 
 # MAGIC -	Event trend alert: 
@@ -26,8 +29,6 @@
 # MAGIC Calculated as the rolling average of the GPV for PA1 over the previous 12 months
 # MAGIC -	Goldstein Running Average (GRA2):
 # MAGIC Calculated as the rolling average of the GPV for PA2 over the previous 24 months
-# MAGIC -	Period of Analysis 1 (PA1): 3 days
-# MAGIC -	Period of Analysis 2 (PA2): 60 days 
 # MAGIC -	Goldstein spike alert: 
 # MAGIC When the *Goldstein Point Value* for a given PA1 (*3 DAYS*) is one standard deviation above GRA1* 
 # MAGIC -	Goldstein trend alert: 
@@ -42,8 +43,6 @@
 # MAGIC Calculated as the rolling average of the TPV for PA1 over the previous 12 months
 # MAGIC -	Goldstein Running Average (TRA2):
 # MAGIC Calculated as the rolling average of the TPV for PA2 over the previous 24 months
-# MAGIC -	Period of Analysis 1 (PA1): 3 days
-# MAGIC -	Period of Analysis 2 (PA2): 60 days 
 # MAGIC -	Tone spike alert: 
 # MAGIC When the *Tone Point Value* for a given PA1 (*3 DAYS*) is one standard deviation above ERA1* 
 # MAGIC -	Tone trend alert: 
@@ -91,10 +90,8 @@ preprocessedGDELT.limit(2).toPandas()
 
 # COMMAND ----------
 
-# DBTITLE 1,Select Only Conflict Events
-conflictEvents = preprocessedGDELT.filter(F.col('QuadClassString').isin('Verbal Conflict', 'Material Conflict'))
-print((conflictEvents.count(), len(conflictEvents.columns)))
-conflictEvents.limit(2).toPandas()
+# DBTITLE 1,Convert Event Date Column from Timestamp to Date
+preprocessedGDELT = preprocessedGDELT.withColumn('EventTimeDate', F.col('EventTimeDate').cast('date'))
 
 # COMMAND ----------
 
@@ -112,79 +109,41 @@ conflictEvents.limit(2).toPandas()
 
 # DBTITLE 1,Get Target Variables
 # Create New Dataframe Column to Count Number of Daily Articles by Country by EventRootCode 
-gdeltTargetOutput = conflictEvents.groupBy('ActionGeo_FullName','EventTimeDate','EventRootCodeString').agg(F.avg('Confidence').alias('avgConfidence'),
+gdeltTargetOutput = preprocessedGDELT.groupBy('ActionGeo_FullName','EventTimeDate','EventRootCodeString').agg(F.avg('Confidence').alias('avgConfidence'),
                                                                                                       F.avg('GoldsteinScale').alias('GoldsteinReportValue'),
                                                                                                       F.avg('MentionDocTone').alias('ToneReportValue'),
                                                                                                       F.sum('nArticles').alias('nArticles')
                                                                                                      ).sort(['EventTimeDate', 'ActionGeo_FullName'], ascending=True)
-print((nEventsDaily.count(), len(nEventsDaily.columns)))
-nEventsDaily.select('nArticles').describe().show()
-nEventsDaily.limit(2).toPandas()
+print((gdeltTargetOutput.count(), len(gdeltTargetOutput.columns)))
+gdeltTargetOutput.select('nArticles').describe().show()
+gdeltTargetOutput.limit(2).toPandas()
 
 # COMMAND ----------
 
-# DBTITLE 1,Calculate Report Value (ERV)
+# DBTITLE 1,Calculate Event Report Value (ERV)
 # create a Window, country by date
 countriesDaily_window = Window.partitionBy('ActionGeo_FullName').orderBy('EventTimeDate')
 
 # get daily percent of articles for each Event Code string within Window
-nEventsDailyPartitioned = nEventsDaily.withColumn('EventReportValue', F.col('nArticles')/F.sum('nArticles').over(countriesDaily_window))
-nEventsDailyPartitioned.limit(2).toPandas()
+gdeltTargetOutputPartitioned = gdeltTargetOutput.withColumn('EventReportValue', F.col('nArticles')/F.sum('nArticles').over(countriesDaily_window))
+gdeltTargetOutputPartitioned.limit(2).toPandas()
 
 # COMMAND ----------
 
 # verify output
-AFG_01feb2021 = nEventsDailyPartitioned.filter((F.col('ActionGeo_FullName') == 'Afghanistan') & (F.col('EventTimeDate') == '2021-02-01'))
-print('All Report Values for One Country Per Day Should Sum to 100% (or 1)')
+AFG_01feb2021 = gdeltTargetOutputPartitioned.filter((F.col('ActionGeo_FullName') == 'Afghanistan') & (F.col('EventTimeDate') == '2021-02-01'))
+AFG_02feb2021 = gdeltTargetOutputPartitioned.filter((F.col('ActionGeo_FullName') == 'Afghanistan') & (F.col('EventTimeDate') == '2021-02-02'))
+AFG_03feb2021 = gdeltTargetOutputPartitioned.filter((F.col('ActionGeo_FullName') == 'Afghanistan') & (F.col('EventTimeDate') == '2021-02-03'))
+print('Event Report Values for One Country Per Day Should Sum to 100% (or 1)')
 print(AFG_01feb2021.select(F.sum('EventReportValue')).collect()[0][0])
-print(AFG_01feb2021.select(F.sum('GoldsteinReportValue')).collect()[0][0])
-print(AFG_01feb2021.select(F.sum('ToneReportValue')).collect()[0][0])
+print(AFG_02feb2021.select(F.sum('EventReportValue')).collect()[0][0])
+print(AFG_03feb2021.select(F.sum('EventReportValue')).collect()[0][0])
 
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ### (2) Goldstein report value (GRV)
-# MAGIC #### Calculated as the average Goldstein score for all articles tagged as associated to the country
-
-# COMMAND ----------
-
-# DBTITLE 1,Create Column to Count Number of Daily Articles by Country by EventRootCode
-nEventsDaily = conflictEvents.groupBy('ActionGeo_FullName','EventTimeDate','EventRootCodeString').agg(F.sum('nArticles').alias('nArticles')).sort(['EventTimeDate', 'ActionGeo_FullName'], ascending=True)
-print((nEventsDaily.count(), len(nEventsDaily.columns)))
-nEventsDaily.select('nArticles').describe().show()
-nEventsDaily.limit(3).toPandas()
-
-# COMMAND ----------
-
-# verify output
-AFG_01feb2021 = nEventsDailyPartitioned.filter((F.col('ActionGeo_FullName') == 'Afghanistan') & (F.col('EventTimeDate') == '2021-02-01'))
-print('All Report Values for One Country Per Day Should Sum to 100% (or 1)')
-print(AFG_01feb2021.select(F.sum('EventReportValue')).collect()[0][0])
-print(AFG_01feb2021.select(F.sum('GoldsteinReportValue')).collect()[0][0])
-print(AFG_01feb2021.select(F.sum('ToneReportValue')).collect()[0][0])
-
-# COMMAND ----------
-
-# MAGIC %md
-# MAGIC ### (3) Tone report value (TRV)
-# MAGIC #### Calculated as the average Mention Tone for all articles tagged as associated to the country
-
-# COMMAND ----------
-
-# DBTITLE 1,Create Column to Count Number of Daily Articles by Country by EventRootCode
-nEventsDaily = conflictEvents.groupBy('ActionGeo_FullName','EventTimeDate','EventRootCodeString').agg(F.sum('nArticles').alias('nArticles')).sort(['EventTimeDate', 'ActionGeo_FullName'], ascending=True)
-print((nEventsDaily.count(), len(nEventsDaily.columns)))
-nEventsDaily.select('nArticles').describe().show()
-nEventsDaily.limit(3).toPandas()
-
-# COMMAND ----------
-
-# verify output
-AFG_01feb2021 = nEventsDailyPartitioned.filter((F.col('ActionGeo_FullName') == 'Afghanistan') & (F.col('EventTimeDate') == '2021-02-01'))
-print('All Report Values for One Country Per Day Should Sum to 100% (or 1)')
-print(AFG_01feb2021.select(F.sum('EventReportValue')).collect()[0][0])
-print(AFG_01feb2021.select(F.sum('GoldsteinReportValue')).collect()[0][0])
-print(AFG_01feb2021.select(F.sum('ToneReportValue')).collect()[0][0])
+# MAGIC 
+# MAGIC #### Create Running Average (*RA1) and (*RA2): Calculated as the rolling average of the Values for PA1 and PA2
 
 # COMMAND ----------
 
@@ -200,12 +159,19 @@ rolling3d_window = Window.partitionBy('ActionGeo_FullName', 'EventRootCodeString
 
 # COMMAND ----------
 
-# DBTITLE 1,Calculate ERV Rolling Average (ERA1, modified to 30 days)
-# get 30d average of the Event Report Value (ERV) within Window
-rollingERAs = nEventsDailyPartitioned.withColumn('ERA_30d', F.avg('EventReportValue').over(rolling30d_window)) 
-rollingERAs = rollingERAs.withColumn('ERA_3d', F.avg('EventReportValue').over(rolling3d_window))
-rollingERAs = rollingERAs.withColumn('difference', F.col('ERA_30d') - F.col('ERA_3d'))
-rollingERAs.limit(10).toPandas()
+# DBTITLE 1,Calculate Rolling Average (RA1/RA2, modified to 30 days)
+# get 3d/30d average of the Event Report Value (ERV) within Window
+rollingERAs1 = gdeltTargetOutputPartitioned.withColumn('ERA_30d', F.avg('EventReportValue').over(rolling30d_window)) 
+rollingERAs = rollingERAs1.withColumn('ERA_3d', F.avg('EventReportValue').over(rolling3d_window))
+
+# get 3d/30d average of the Golstein Report Value (GRV) within Window
+rollingGRVs1 = rollingERAs.withColumn('GRA_30d', F.avg('GoldsteinReportValue').over(rolling30d_window)) 
+rollingGRVs = rollingGRVs1.withColumn('GRA_3d', F.avg('GoldsteinReportValue').over(rolling3d_window))
+
+# get 3d/30d average of the Tone Report Value (ERV) within Window
+rollingTRVs = rollingGRVs.withColumn('TRA_30d', F.avg('ToneReportValue').over(rolling30d_window)) 
+rollingAvgsAll = rollingTRVs.withColumn('TRA_3d', F.avg('ToneReportValue').over(rolling3d_window))
+rollingAvgsAll.limit(10).toPandas()
 
 # COMMAND ----------
 
