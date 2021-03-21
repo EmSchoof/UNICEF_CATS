@@ -59,7 +59,6 @@ from functools import reduce
 from itertools import chain
 import numpy as np
 import matplotlib.pyplot as plt
-from pyspark.ml.feature import Bucketizer
 from pyspark.mllib.stat import Statistics
 from pyspark.sql import DataFrame
 import pyspark.sql.functions as F
@@ -187,7 +186,7 @@ def plot_corr_matrix(correlations,attr,fig_no):
     plt.show()
     
 # select variables to check correlation
-df_features = rollingERAs.select('avgConfidence','avgTone','avgGoldstein','nArticles','EventReportValue','ERA_3d','ERA_30d','difference') 
+df_features = rollingERAs.select('avgConfidence','nArticles','ToneReportValue','GoldsteinReportValue','EventReportValue') 
 
 # create RDD table for correlation calculation
 rdd_table = df_features.rdd.map(lambda row: row[0:])
