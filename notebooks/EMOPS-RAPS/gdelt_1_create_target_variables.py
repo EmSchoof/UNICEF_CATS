@@ -167,7 +167,7 @@ rollingERAs = rollingERAs1.withColumn('ERA_30d', F.avg('EventReportValue').over(
 rollingGRVs1 = rollingERAs.withColumn('GRA_3d', F.avg('GoldsteinReportValue').over(rolling3d_window)) 
 rollingGRVs = rollingGRVs1.withColumn('GRA_30d', F.avg('GoldsteinReportValue').over(rolling30d_window))
 
-# get 3d/30d average of the Tone Report Value (ERV) within Window
+# get 3d/30d average of the Tone Report Value (TRV) within Window
 rollingTRVs = rollingGRVs.withColumn('TRA_3d', F.avg('ToneReportValue').over(rolling3d_window)) 
 rollingAvgsAll = rollingTRVs.withColumn('TRA_30d', F.avg('ToneReportValue').over(rolling30d_window))
 rollingAvgsAll.limit(10).toPandas()
@@ -183,13 +183,42 @@ weightedAvg = F.udf(lambda col: F.sum(F.col(col) * F.col('nArticles')) / F.sum('
 
 # COMMAND ----------
 
-# get 3d/30d WEIGHTED average of the Tone Report Value (ERV) within Country Window
-weightedERA1 = rollingAvgsAll.withColumn('weightedERA_3d', F.sum(F.col('ERA_3d') * F.col('nArticles'))/F.sum('nArticles').over(countriesDaily_window))
-weightedERA1.limit(10).toPandas()
+# get 3d WEIGHTED average of the Event Report Value (ERV) within Country Window
+weightedERA1 = rollingAvgsAll.withColumn('weightedERA_3d_num', F.sum(F.col('ERA_3d') * F.col('nArticles')).over(rolling3d_window))
+weightedERA1 = weightedERA1.withColumn('weightedERA_3d_dem', F.sum('nArticles').over(rolling3d_window))
+weightedERA1 = weightedERA1.withColumn('weightedERA_3d', F.col('weightedERA_3d_num')/F.col('weightedERA_3d_dem'))
+# 30d
+weightedERA2 = weightedERA1.withColumn('weightedERA_30d_num', F.sum(F.col('ERA_30d') * F.col('nArticles')).over(rolling30d_window))
+weightedERA2 = weightedERA2.withColumn('weightedERA_30d_dem', F.sum('nArticles').over(rolling3d_window))
+weightedERA2 = weightedERA2.withColumn('weightedERA_30d', F.col('weightedERA_30d_num')/F.col('weightedERA_30d_dem'))
+
+# get 3d WEIGHTED average of the Goldstein Report Value (GRV) within Country Window
+weightedGRA1 = weightedERA2.withColumn('weightedGRA_3d_num', F.sum(F.col('GRA_3d') * F.col('nArticles')).over(rolling3d_window))
+weightedGRA1 = weightedGRA1.withColumn('weightedGRA_3d_dem', F.sum('nArticles').over(rolling3d_window))
+weightedGRA1 = weightedGRA1.withColumn('weightedGRA_3d', F.col('weightedGRA_3d_num')/F.col('weightedGRA_3d_dem'))
+# 30d
+weightedGRA2 = weightedGRA1.withColumn('weightedGRA_30d_num', F.sum(F.col('GRA_30d') * F.col('nArticles')).over(rolling30d_window))
+weightedGRA2 = weightedGRA2.withColumn('weightedGRA_30d_dem', F.sum('nArticles').over(rolling3d_window))
+weightedGRA2 = weightedGRA2.withColumn('weightedGRA_30d', F.col('weightedGRA_30d_num')/F.col('weightedGRA_30d_dem'))
+
+# get 3d/30d WEIGHTED average of the Tone Report Value (GRV) within Country Window
+weightedTRA1 = weightedGRA2.withColumn('weightedTRA_3d_num', F.sum(F.col('TRA_3d') * F.col('nArticles')).over(rolling3d_window))
+weightedTRA1 = weightedTRA1.withColumn('weightedTRA_3d_dem', F.sum('nArticles').over(rolling3d_window))
+weightedTRA1 = weightedTRA1.withColumn('weightedTRA_3d', F.col('weightedTRA_3d_num')/F.col('weightedTRA_3d_dem'))
+# 30d
+weightedTRA2 = weightedTRA1.withColumn('weightedTRA_30d_num', F.sum(F.col('TRA_30d') * F.col('nArticles')).over(rolling30d_window))
+weightedTRA2 = weightedTRA2.withColumn('weightedTRA_30d_dem', F.sum('nArticles').over(rolling3d_window))
+weightedRollingAvgs = weightedTRA2.withColumn('weightedTRA_30d', F.col('weightedTRA_30d_num')/F.col('weightedTRA_30d_dem'))
+weightedRollingAvgs.limit(10).toPandas()
 
 # COMMAND ----------
 
+# DBTITLE 1,Select Output Data
+targetValues = weightedRollingAvgs.select('ActionGeo_FullName','EventTimeDate','EventRootCodeString','nArticles','avgConfidence',
+                                          'GoldsteinReportValue','ToneReportValue','EventReportValue','weightedERA_3d','weightedERA_30d',
+                                          'weightedGRA_3d','weightedGRA_30d','weightedTRA_3d','weightedTRA_30d')
 
+# 
 
 # COMMAND ----------
 
