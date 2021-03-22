@@ -34,7 +34,6 @@ from functools import reduce
 from itertools import chain
 import numpy as np
 import matplotlib.pyplot as plt
-from pyspark.ml.feature import Bucketizer
 from pyspark.mllib.stat import Statistics
 from pyspark.sql import DataFrame
 import pyspark.sql.functions as F
@@ -54,52 +53,26 @@ preprocessedGDELT = spark.read.format("csv") \
   .option("inferSchema", infer_schema) \
   .option("header", first_row_is_header) \
   .option("sep", delimiter) \
-  .load("/Filestore/tables/tmp/gdelt/preprocessed.csv")
-
-# COMMAND ----------
-
-# DBTITLE 1,Verify Unique on Global Event IDs
+  .load("/Filestore/tables/tmp/gdelt/targetvalues.csv")
 print((preprocessedGDELT.count(), len(preprocessedGDELT.columns)))
-preprocessedGDELT.agg(F.countDistinct(F.col("GLOBALEVENTID")).alias("nEvents")).show()
 preprocessedGDELT.limit(10).toPandas()
 
 # COMMAND ----------
 
-# DBTITLE 1,Select Only Conflict Events
-conflictEvents = preprocessedGDELT.filter(F.col('QuadClassString').isin('Verbal Conflict', 'Material Conflict'))
-print((conflictEvents.count(), len(conflictEvents.columns)))
-conflictEvents.limit(10).toPandas()
+# DBTITLE 1,Select Events Data
+eventsData = preprocessedGDELT.select('ActionGeo_FullName','EventTimeDate','EventRootCodeString','nArticles','avgConfidence',
+                                          'EventReportValue','weightedERA_3d','weightedERA_60d')
+
+print((eventsData.count(), len(eventsData.columns)))
+eventsData.limit(2).toPandas()
 
 # COMMAND ----------
 
-display(rollingERAs)
+display(eventsData)
 
 # COMMAND ----------
 
-display(rollingERAs)
-
-# COMMAND ----------
-
-# DBTITLE 1,Assess Value Correlations In Dataset
-def plot_corr_matrix(correlations,attr,fig_no):
-    fig=plt.figure(fig_no, figsize=(16,10))
-    ax=fig.add_subplot(111)
-    ax.set_title("Correlation Matrix for Specified Attributes")
-    ax.set_xticklabels(['']+attr)
-    ax.set_yticklabels(['']+attr)
-    cax=ax.matshow(correlations,vmax=1,vmin=-1)
-    fig.colorbar(cax)
-    plt.show()
-    
-# select variables to check correlation
-df_features = rollingERAs.select('avgConfidence','avgTone','avgGoldstein','nArticles','EventReportValue','ERA_3d','ERA_30d','difference') 
-
-# create RDD table for correlation calculation
-rdd_table = df_features.rdd.map(lambda row: row[0:])
-
-# get the correlation matrix
-corr_mat=Statistics.corr(rdd_table, method="pearson")
-plot_corr_matrix(corr_mat, df_features.columns, 234)
+display(eventsData)
 
 # COMMAND ----------
 
@@ -113,21 +86,22 @@ plt.rcParams["figure.figsize"] = (16,8)
 import pylab as pl
 import seaborn as sns
 import scipy.stats as stats
-from statsmodels.distributions.empirical_distribution import ECDF
+# Seed the random number generator
+np.random.seed(15)
 
 # COMMAND ----------
 
-avgDiffs = rollingERAs.select('difference').rdd.flatMap(lambda x: x).collect()
-#avgDiffs
+# MAGIC %md
+# MAGIC ### ERV
 
 # COMMAND ----------
 
-print('Number of Nulls: ', rollingERAs.filter(F.col('difference').isNull()).count())
-rollingERAs.select('difference').describe().show()
+print('Number of Nulls: ', eventsData.filter(F.col('EventReportValue').isNull()).count())
+eventsData.select('EventReportValue').describe().show()
 
 # COMMAND ----------
 
-quantile = rollingERAs.approxQuantile(['difference'], [0.25, 0.5, 0.75], 0)
+quantile = eventsData.approxQuantile(['EventReportValue'], [0.25, 0.5, 0.75], 0)
 quantile_25 = quantile[0][0]
 quantile_50 = quantile[0][1]
 quantile_75 = quantile[0][2]
@@ -137,34 +111,128 @@ print('quantile_75: '+str(quantile_75))
 
 # COMMAND ----------
 
-# DBTITLE 1,Plot the Distribution of the Difference Between Two Averages
+dailyERV = eventsData.select('EventReportValue').rdd.flatMap(lambda x: x).collect()
+
+# COMMAND ----------
+
 # create a figure with two plots
 fig, (boxplot, histogram) = plt.subplots(2, sharex=True, gridspec_kw={"height_ratios": (.2, .9)})
 
 # add boxplot
-sns.boxplot(avgDiffs, ax=boxplot)
+sns.boxplot(dailyERV, ax=boxplot)
 boxplot.set(xlabel='') # Remove x-axis label from boxplot
 
 # add histogram and normal curve
-fit = stats.norm.pdf(avgDiffs, np.mean(avgDiffs), np.std(avgDiffs))
-pl.plot(avgDiffs, fit, '-o')
-#pl.hist(avgDiffs, density=True, alpha=0.5, bins=20)
+fit = stats.norm.pdf(dailyERV, np.mean(dailyERV), np.std(dailyERV))
+pl.plot(dailyERV, fit, '-o')
+pl.hist(dailyERV, density=True, alpha=0.5, bins=20)
 
 # label axis 
-pl.xlabel('Difference Between ERV 3d and 30d Rolling Averages')
+pl.xlabel('EventReportValue')
 pl.ylabel('Probability Density Function')
-pl.title('Difference Distribution Associated with ERV 3d and 30d Rolling Averages')
+pl.title('EventReportValue Distribution')
 
 # how plot and print mean and std sample information
 plt.show()
-'The sample(n=' + str(len(avgDiffs)) + ') population mean difference of averages is ' + str(round(np.mean(avgDiffs), 2)) + ' with a standard deviation of ' + str(round(np.std(avgDiffs), 2)) + '.'
+'The sample(n=' + str(len(dailyERV)) + ') population mean difference of averages is ' + str(round(np.mean(dailyERV), 2)) + ' with a standard deviation of ' + str(round(np.std(dailyERV), 2)) + '.'
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC ### Weighted ERA 3D
+
+# COMMAND ----------
+
+print('Number of Nulls: ', eventsData.filter(F.col('weightedERA_3d').isNull()).count())
+eventsData.select('weightedERA_3d').describe().show()
+
+# COMMAND ----------
+
+quantile = eventsData.approxQuantile(['weightedERA_3d'], [0.25, 0.5, 0.75], 0)
+quantile_25 = quantile[0][0]
+quantile_50 = quantile[0][1]
+quantile_75 = quantile[0][2]
+print('quantile_25: '+str(quantile_25))
+print('quantile_50: '+str(quantile_50))
+print('quantile_75: '+str(quantile_75))
+
+# COMMAND ----------
+
+weightedERA_3 = eventsData.select('weightedERA_3d').rdd.flatMap(lambda x: x).collect()
+
+# COMMAND ----------
+
+# create a figure with two plots
+fig, (boxplot, histogram) = plt.subplots(2, sharex=True, gridspec_kw={"height_ratios": (.2, .9)})
+
+# add boxplot
+sns.boxplot(weightedERA_3, ax=boxplot)
+boxplot.set(xlabel='') # Remove x-axis label from boxplot
+
+# add histogram and normal curve
+fit = stats.norm.pdf(weightedERA_3, np.mean(weightedERA_3), np.std(weightedERA_3))
+pl.plot(weightedERA_3, fit, '-o')
+pl.hist(weightedERA_3, density=True, alpha=0.5, bins=20)
+
+# label axis 
+pl.xlabel('ERV 3d Rolling Averages')
+pl.ylabel('Probability Density Function')
+pl.title('ERV 3d Rolling Weighted Averages Distribution')
+
+# how plot and print mean and std sample information
+plt.show()
+'The sample(n=' + str(len(weightedERA_3)) + ') population mean difference of averages is ' + str(round(np.mean(weightedERA_3), 2)) + ' with a standard deviation of ' + str(round(np.std(weightedERA_3), 2)) + '.'
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC ### Weighted ERA 60D
+
+# COMMAND ----------
+
+print('Number of Nulls: ', eventsData.filter(F.col('weightedERA_60d').isNull()).count())
+eventsData.select('weightedERA_60d').describe().show()
+
+# COMMAND ----------
+
+quantile = eventsData.approxQuantile(['weightedERA_60d'], [0.25, 0.5, 0.75], 0)
+quantile_25 = quantile[0][0]
+quantile_50 = quantile[0][1]
+quantile_75 = quantile[0][2]
+print('quantile_25: '+str(quantile_25))
+print('quantile_50: '+str(quantile_50))
+print('quantile_75: '+str(quantile_75))
+
+# COMMAND ----------
+
+weightedERA_60 = eventsData.select('weightedERA_60d').rdd.flatMap(lambda x: x).collect()
+
+# COMMAND ----------
+
+# create a figure with two plots
+fig, (boxplot, histogram) = plt.subplots(2, sharex=True, gridspec_kw={"height_ratios": (.2, .9)})
+
+# add boxplot
+sns.boxplot(weightedERA_60, ax=boxplot)
+boxplot.set(xlabel='') # Remove x-axis label from boxplot
+
+# add histogram and normal curve
+fit = stats.norm.pdf(weightedERA_60, np.mean(weightedERA_60), np.std(weightedERA_60))
+pl.plot(weightedERA_60, fit, '-o')
+pl.hist(weightedERA_60, density=True, alpha=0.5, bins=20)
+
+# label axis 
+pl.xlabel('ERV 60d Rolling Averages')
+pl.ylabel('Probability Density Function')
+pl.title('ERV 60d Rolling Weighted Averages Distribution')
+
+# how plot and print mean and std sample information
+plt.show()
+'The sample(n=' + str(len(weightedERA_60d)) + ') population mean difference of averages is ' + str(round(np.mean(weightedERA_60d), 2)) + ' with a standard deviation of ' + str(round(np.std(weightedERA_60d), 2)) + '.'
 
 # COMMAND ----------
 
 # DBTITLE 1,Assess Normalcy
-# Seed the random number generator
-np.random.seed(15)
-
 # create theoretical dataset with Normal Distribution 
 cdf_mean = np.mean(avgDiffs)
 cdf_std = np.std(avgDiffs)
