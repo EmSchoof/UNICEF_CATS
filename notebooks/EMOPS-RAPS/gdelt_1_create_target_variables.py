@@ -233,10 +233,51 @@ def plot_corr_matrix(correlations,attr,fig_no):
     cax=ax.matshow(correlations,vmax=1,vmin=-1)
     fig.colorbar(cax)
     plt.show()
-    
+
+# COMMAND ----------
+
+# DBTITLE 1,EventReportValue
 # select variables to check correlation
-df_features = targetValueOutput.select('nArticles','avgConfidence','GoldsteinReportValue','ToneReportValue','EventReportValue',
-                                    'weightedERA_3d','weightedERA_60d','weightedGRA_3d','weightedGRA_60d','weightedTRA_3d','weightedTRA_60d') 
+df_features = targetValueOutput.select('avgConfidence','EventReportValue','weightedERA_3d','weightedERA_60d') 
+
+# create RDD table for correlation calculation
+rdd_table = df_features.rdd.map(lambda row: row[0:])
+
+# get the correlation matrix
+corr_mat=Statistics.corr(rdd_table, method="pearson")
+plot_corr_matrix(corr_mat, df_features.columns, 234)
+
+# COMMAND ----------
+
+# DBTITLE 1,GoldsteinReportValue
+# select variables to check correlation
+df_features = targetValueOutput.select('avgConfidence','GoldsteinReportValue','weightedGRA_3d','weightedGRA_60d') 
+
+# create RDD table for correlation calculation
+rdd_table = df_features.rdd.map(lambda row: row[0:])
+
+# get the correlation matrix
+corr_mat=Statistics.corr(rdd_table, method="pearson")
+plot_corr_matrix(corr_mat, df_features.columns, 234)
+
+# COMMAND ----------
+
+# DBTITLE 1,ToneReportValue
+# select variables to check correlation
+df_features = targetValueOutput.select('avgConfidence','ToneReportValue','weightedTRA_3d','weightedTRA_60d') 
+
+# create RDD table for correlation calculation
+rdd_table = df_features.rdd.map(lambda row: row[0:])
+
+# get the correlation matrix
+corr_mat=Statistics.corr(rdd_table, method="pearson")
+plot_corr_matrix(corr_mat, df_features.columns, 234)
+
+# COMMAND ----------
+
+# DBTITLE 1,Overall
+# select variables to check correlation
+df_features = targetValueOutput.select('weightedERA_3d','weightedERA_60d','weightedGRA_3d','weightedGRA_60d','weightedTRA_3d','weightedTRA_60d') 
 
 # create RDD table for correlation calculation
 rdd_table = df_features.rdd.map(lambda row: row[0:])
