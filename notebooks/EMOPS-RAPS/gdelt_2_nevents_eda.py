@@ -68,17 +68,22 @@ eventsData.limit(2).toPandas()
 
 # COMMAND ----------
 
-display(eventsData)
+# DBTITLE 1,Explore Values in Conflict vs Not Situations
+# create conflict column
+conflict_events = ['DEMAND','DISAPPROVE','PROTEST','REJECT','THREATEN','ASSAULT','COERCE','ENGAGE IN UNCONVENTIONAL MASS VIOLENCE','EXHIBIT MILITARY POSTURE','FIGHT','REDUCE RELATIONS']
+eventsData = eventsData.withColumn('if_conflict', F.when(F.col('EventRootCodeString').isin(conflict_events), True).otherwise(False))
+eventsData.limit(10).toPandas()
 
 # COMMAND ----------
 
-display(eventsData)
+eventsDataConflict = eventsData.filter(F.col('if_conflict') == True)
+eventsDataNonConflict = eventsData.filter(F.col('if_conflict') != True)
 
 # COMMAND ----------
 
 # MAGIC %md
 # MAGIC 
-# MAGIC ### Assess the Difference Between 3d and 30d Rolling Averages of the Event Report Value (ERV - % Articles)
+# MAGIC ### Compare Distribution of EventReportValue Rolling Averages for Conflict vs Not Events
 
 # COMMAND ----------
 
@@ -91,50 +96,53 @@ np.random.seed(15)
 
 # COMMAND ----------
 
-# MAGIC %md
-# MAGIC ### ERV
+def get_quantiles(df, col):
+    quantile = df.approxQuantile([col], [0.25, 0.5, 0.75], 0)
+    quantile_25 = quantile[0][0]
+    quantile_50 = quantile[0][1]
+    quantile_75 = quantile[0][2]
+    print('quantile_25: '+str(quantile_25))
+    print('quantile_50: '+str(quantile_50))
+    print('quantile_75: '+str(quantile_75))
 
 # COMMAND ----------
 
-print('Number of Nulls: ', eventsData.filter(F.col('EventReportValue').isNull()).count())
-eventsData.select('EventReportValue').describe().show()
+# DBTITLE 1,Calculate Empirical Cumulative Distribution Function (ECDF)
+# create edcf function
+def ecdf(data):
+    """Compute ECDF for a one-dimensional array of measurements."""
+    x = np.sort(data)
+    y = np.arange(1, len(data)+1) / len(data)
+    return x, y
 
 # COMMAND ----------
 
-quantile = eventsData.approxQuantile(['EventReportValue'], [0.25, 0.5, 0.75], 0)
-quantile_25 = quantile[0][0]
-quantile_50 = quantile[0][1]
-quantile_75 = quantile[0][2]
-print('quantile_25: '+str(quantile_25))
-print('quantile_50: '+str(quantile_50))
-print('quantile_75: '+str(quantile_75))
+# DBTITLE 1,Plot ECDF
+def plot_ecdf(vals_list, title):
+  
+      # create theoretical dataset with Normal Distribution 
+      cdf_mean = np.mean(vals_list)
+      cdf_std = np.std(vals_list)
 
-# COMMAND ----------
+      # Simulate a random sample with the same distribution and size of 1,000,000
+      cdf_samples = np.random.normal(cdf_mean, cdf_std, size=1000000)
 
-dailyERV = eventsData.select('EventReportValue').rdd.flatMap(lambda x: x).collect()
+      # Compute the CDFs
+      x_sample, y_sample = ecdf(vals_list)
+      x_norm, y_norm = ecdf(cdf_samples)
 
-# COMMAND ----------
+      # Plot both ECDFs on same the same figure
+      fig = plt.plot(x_sample, y_sample, marker='.', linestyle='none', alpha=0.5)
+      fig = plt.plot(x_norm, y_norm, marker='.', linestyle='none', alpha=0.5)
 
-# create a figure with two plots
-fig, (boxplot, histogram) = plt.subplots(2, sharex=True, gridspec_kw={"height_ratios": (.2, .9)})
+      # Label figure
+      pl.xlabel(title)
+      fig = plt.ylabel('CDF')
+      fig = plt.legend(('Sample Population', 'Theoretical Norm'))
+      fig = plt.title('Variable ECDF Distribution Compared to Statistical Norm')
 
-# add boxplot
-sns.boxplot(dailyERV, ax=boxplot)
-boxplot.set(xlabel='') # Remove x-axis label from boxplot
-
-# add histogram and normal curve
-fit = stats.norm.pdf(dailyERV, np.mean(dailyERV), np.std(dailyERV))
-pl.plot(dailyERV, fit, '-o')
-pl.hist(dailyERV, density=True, alpha=0.5, bins=20)
-
-# label axis 
-pl.xlabel('EventReportValue')
-pl.ylabel('Probability Density Function')
-pl.title('EventReportValue Distribution')
-
-# how plot and print mean and std sample information
-plt.show()
-'The sample(n=' + str(len(dailyERV)) + ') population mean difference of averages is ' + str(round(np.mean(dailyERV), 2)) + ' with a standard deviation of ' + str(round(np.std(dailyERV), 2)) + '.'
+      # Save plots
+      plt.show()
 
 # COMMAND ----------
 
@@ -148,40 +156,26 @@ eventsData.select('weightedERA_3d').describe().show()
 
 # COMMAND ----------
 
-quantile = eventsData.approxQuantile(['weightedERA_3d'], [0.25, 0.5, 0.75], 0)
-quantile_25 = quantile[0][0]
-quantile_50 = quantile[0][1]
-quantile_75 = quantile[0][2]
-print('quantile_25: '+str(quantile_25))
-print('quantile_50: '+str(quantile_50))
-print('quantile_75: '+str(quantile_75))
+# DBTITLE 1,Get Quantiles
+print('Get Conflict Quantiles for Weighted ERA 3D: ')
+get_quantiles(eventsDataConflict, 'weightedERA_3d')
+print('')
+print('')
+print('Get Non-Conflict Quantiles for Weighted ERA 3D: ')
+get_quantiles(eventsDataNonConflict, 'weightedERA_3d')
 
 # COMMAND ----------
 
-weightedERA_3 = eventsData.select('weightedERA_3d').rdd.flatMap(lambda x: x).collect()
+wERA_3_conflict = eventsDataConflict.select('weightedERA_3d').rdd.flatMap(lambda x: x).collect()
+wERA_3_not = eventsDataNonConflict.select('weightedERA_3d').rdd.flatMap(lambda x: x).collect()
 
 # COMMAND ----------
 
-# create a figure with two plots
-fig, (boxplot, histogram) = plt.subplots(2, sharex=True, gridspec_kw={"height_ratios": (.2, .9)})
+plot_ecdf(wERA_3_conflict, 'CONFLICT ERV 3d Rolling Averages')
 
-# add boxplot
-sns.boxplot(weightedERA_3, ax=boxplot)
-boxplot.set(xlabel='') # Remove x-axis label from boxplot
+# COMMAND ----------
 
-# add histogram and normal curve
-fit = stats.norm.pdf(weightedERA_3, np.mean(weightedERA_3), np.std(weightedERA_3))
-pl.plot(weightedERA_3, fit, '-o')
-pl.hist(weightedERA_3, density=True, alpha=0.5, bins=20)
-
-# label axis 
-pl.xlabel('ERV 3d Rolling Averages')
-pl.ylabel('Probability Density Function')
-pl.title('ERV 3d Rolling Weighted Averages Distribution')
-
-# how plot and print mean and std sample information
-plt.show()
-'The sample(n=' + str(len(weightedERA_3)) + ') population mean difference of averages is ' + str(round(np.mean(weightedERA_3), 2)) + ' with a standard deviation of ' + str(round(np.std(weightedERA_3), 2)) + '.'
+plot_ecdf(wERA_3_not, 'NON-CONFLICT ERV 3d Rolling Averages')
 
 # COMMAND ----------
 
@@ -195,99 +189,26 @@ eventsData.select('weightedERA_60d').describe().show()
 
 # COMMAND ----------
 
-quantile = eventsData.approxQuantile(['weightedERA_60d'], [0.25, 0.5, 0.75], 0)
-quantile_25 = quantile[0][0]
-quantile_50 = quantile[0][1]
-quantile_75 = quantile[0][2]
-print('quantile_25: '+str(quantile_25))
-print('quantile_50: '+str(quantile_50))
-print('quantile_75: '+str(quantile_75))
+# DBTITLE 1,Get Quantiles
+print('Get Conflict Quantiles for Weighted ERA 60D: ')
+get_quantiles(eventsDataConflict, 'weightedERA_60d')
+print('')
+print('')
+print('Get Non-Conflict Quantiles for Weighted ERA 60D: ')
+get_quantiles(eventsDataNonConflict, 'weightedERA_60d')
 
 # COMMAND ----------
 
-weightedERA_60 = eventsData.select('weightedERA_60d').rdd.flatMap(lambda x: x).collect()
+wERA_60_conflict = eventsDataConflict.select('weightedERA_60d').rdd.flatMap(lambda x: x).collect()
+wERA_60_not = eventsDataNonConflict.select('weightedERA_60d').rdd.flatMap(lambda x: x).collect()
 
 # COMMAND ----------
 
-# create a figure with two plots
-fig, (boxplot, histogram) = plt.subplots(2, sharex=True, gridspec_kw={"height_ratios": (.2, .9)})
-
-# add boxplot
-sns.boxplot(weightedERA_60, ax=boxplot)
-boxplot.set(xlabel='') # Remove x-axis label from boxplot
-
-# add histogram and normal curve
-fit = stats.norm.pdf(weightedERA_60, np.mean(weightedERA_60), np.std(weightedERA_60))
-pl.plot(weightedERA_60, fit, '-o')
-pl.hist(weightedERA_60, density=True, alpha=0.5, bins=20)
-
-# label axis 
-pl.xlabel('ERV 60d Rolling Averages')
-pl.ylabel('Probability Density Function')
-pl.title('ERV 60d Rolling Weighted Averages Distribution')
-
-# how plot and print mean and std sample information
-plt.show()
-'The sample(n=' + str(len(weightedERA_60d)) + ') population mean difference of averages is ' + str(round(np.mean(weightedERA_60d), 2)) + ' with a standard deviation of ' + str(round(np.std(weightedERA_60d), 2)) + '.'
+plot_ecdf(wERA_60_conflict, 'CONFLICT ERV 60d Rolling Averages')
 
 # COMMAND ----------
 
-# DBTITLE 1,Assess Normalcy
-# create theoretical dataset with Normal Distribution 
-cdf_mean = np.mean(avgDiffs)
-cdf_std = np.std(avgDiffs)
-
-# Simulate a random sample with the same distribution and size of 1,000,000
-cdf_samples = np.random.normal(cdf_mean, cdf_std, size=1000000)
-
-# COMMAND ----------
-
-# DBTITLE 1,Calculate Empirical Cumulative Distribution Function (ECDF)
-# create edcf function
-def ecdf(data):
-    """Compute ECDF for a one-dimensional array of measurements."""
-    x = np.sort(data)
-    y = np.arange(1, len(data)+1) / len(data)
-    return x, y
-
-# Compute the CDFs
-x_sample, y_sample = ecdf(avgDiffs)
-x_norm, y_norm = ecdf(cdf_samples)
-
-# COMMAND ----------
-
-# DBTITLE 1,Plot ECDF
-# Plot both ECDFs on same the same figure
-fig = plt.plot(x_sample, y_sample, marker='.', linestyle='none', alpha=0.5)
-fig = plt.plot(x_norm, y_norm, marker='.', linestyle='none', alpha=0.5)
-
-# Label figure
-fig = plt.xlabel('Difference Between ERV 3d and 30d Rolling Averages')
-fig = plt.ylabel('CDF')
-fig = plt.legend(('Sample Population', 'Theoretical Norm'))
-fig = plt.title('Distribution of Difference Between ERV 3d and 30d Rolling Averages')
-
-# Save plots
-plt.show()
-
-# COMMAND ----------
-
-# create the split list ranging from 0 to  21, interval of 0.5
-split_list = [float(i) for i in np.arange(0,21,0.5)]
-
-# initialize buketizer
-bucketizer = Bucketizer(splits=split_list,inputCol='difference',outputCol='buckets')
-
-# transform
-df_buck = bucketizer.setHandleInvalid('keep').transform(rollingERAs.select('difference').dropna())
-
-# the "buckets" column gives the bucket rank, not the acctual bucket value(range), 
-# use dictionary to match bucket rank and bucket value
-bucket_names = dict(zip([float(i) for i in range(len(split_list[1:]))],split_list[1:]))
-
-# user defined function to update the data frame with the bucket value
-udf_foo = F.udf(lambda x: bucket_names[x], DoubleType())
-#bins = df_buck.withColumn('bins', udf_foo('buckets')).groupBy('bins').count().sort('bins').toPandas()
+plot_ecdf(wERA_60_not, 'NON-CONFLICT ERV 60d Rolling Averages')
 
 # COMMAND ----------
 
