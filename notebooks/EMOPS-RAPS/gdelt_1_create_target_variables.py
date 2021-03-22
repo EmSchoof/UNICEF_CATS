@@ -121,7 +121,7 @@ gdeltTargetOutput.limit(2).toPandas()
 
 # DBTITLE 1,Calculate Event Report Value (ERV)
 # create a Window, country by date
-countriesDaily_window = Window.partitionBy('ActionGeo_FullName').orderBy('EventTimeDate')
+countriesDaily_window = Window.partitionBy('ActionGeo_FullName', 'EventTimeDate').orderBy('EventTimeDate')
 
 # get daily percent of articles for each Event Code string within Window
 gdeltTargetOutputPartitioned = gdeltTargetOutput.withColumn('EventReportValue', F.col('nArticles')/F.sum('nArticles').over(countriesDaily_window))
@@ -150,27 +150,46 @@ print(AFG_03feb2021.select(F.sum('EventReportValue')).collect()[0][0])
 # function to calculate number of seconds from number of days
 days = lambda i: i * 86400
 
+# create a 3 day Window, 3 days days previous to the current day (row), using previous casting of timestamp to long (number of seconds)
+rolling3d_window = Window.partitionBy('ActionGeo_FullName', 'EventRootCodeString').orderBy(F.col('EventTimeDate').cast('timestamp').cast('long')).rangeBetween(-days(3), 0)
+
 # create a 30 day Window, 30 days days previous to the current day (row), using previous casting of timestamp to long (number of seconds)
 rolling30d_window = Window.partitionBy('ActionGeo_FullName', 'EventRootCodeString').orderBy(F.col('EventTimeDate').cast('timestamp').cast('long')).rangeBetween(-days(30), 0)
-
-# create a 3 day Window, 30 days days previous to the current day (row), using previous casting of timestamp to long (number of seconds)
-rolling3d_window = Window.partitionBy('ActionGeo_FullName', 'EventRootCodeString').orderBy(F.col('EventTimeDate').cast('timestamp').cast('long')).rangeBetween(-days(3), 0)
 
 # COMMAND ----------
 
 # DBTITLE 1,Calculate Rolling Average (RA1/RA2, modified to 30 days)
 # get 3d/30d average of the Event Report Value (ERV) within Window
-rollingERAs1 = gdeltTargetOutputPartitioned.withColumn('ERA_30d', F.avg('EventReportValue').over(rolling30d_window)) 
-rollingERAs = rollingERAs1.withColumn('ERA_3d', F.avg('EventReportValue').over(rolling3d_window))
+rollingERAs1 = gdeltTargetOutputPartitioned.withColumn('ERA_3d', F.avg('EventReportValue').over(rolling3d_window)) 
+rollingERAs = rollingERAs1.withColumn('ERA_30d', F.avg('EventReportValue').over(rolling30d_window))
 
 # get 3d/30d average of the Golstein Report Value (GRV) within Window
-rollingGRVs1 = rollingERAs.withColumn('GRA_30d', F.avg('GoldsteinReportValue').over(rolling30d_window)) 
-rollingGRVs = rollingGRVs1.withColumn('GRA_3d', F.avg('GoldsteinReportValue').over(rolling3d_window))
+rollingGRVs1 = rollingERAs.withColumn('GRA_3d', F.avg('GoldsteinReportValue').over(rolling3d_window)) 
+rollingGRVs = rollingGRVs1.withColumn('GRA_30d', F.avg('GoldsteinReportValue').over(rolling30d_window))
 
 # get 3d/30d average of the Tone Report Value (ERV) within Window
-rollingTRVs = rollingGRVs.withColumn('TRA_30d', F.avg('ToneReportValue').over(rolling30d_window)) 
-rollingAvgsAll = rollingTRVs.withColumn('TRA_3d', F.avg('ToneReportValue').over(rolling3d_window))
+rollingTRVs = rollingGRVs.withColumn('TRA_3d', F.avg('ToneReportValue').over(rolling3d_window)) 
+rollingAvgsAll = rollingTRVs.withColumn('TRA_30d', F.avg('ToneReportValue').over(rolling30d_window))
 rollingAvgsAll.limit(10).toPandas()
+
+# COMMAND ----------
+
+# DBTITLE 1,Calculate Weighted Averages of Rolling Values
+def weighted_avg(original_avg, sample_n):
+  return np.sum(original_avg * sample_n) / np.sum(sample_n)
+
+
+weightedAvg = F.udf(lambda col: F.sum(F.col(col) * F.col('nArticles')) / F.sum('nArticles'))
+
+# COMMAND ----------
+
+# get 3d/30d WEIGHTED average of the Tone Report Value (ERV) within Country Window
+weightedERA1 = rollingAvgsAll.withColumn('weightedERA_3d', F.sum(F.col('ERA_3d') * F.col('nArticles'))/F.sum('nArticles').over(countriesDaily_window))
+weightedERA1.limit(10).toPandas()
+
+# COMMAND ----------
+
+
 
 # COMMAND ----------
 
@@ -186,7 +205,7 @@ def plot_corr_matrix(correlations,attr,fig_no):
     plt.show()
     
 # select variables to check correlation
-df_features = rollingERAs.select('avgConfidence','nArticles','ToneReportValue','GoldsteinReportValue','EventReportValue') 
+df_features = rollingAvgsAll.select('avgConfidence','nArticles','ToneReportValue','GoldsteinReportValue','EventReportValue') 
 
 # create RDD table for correlation calculation
 rdd_table = df_features.rdd.map(lambda row: row[0:])
@@ -194,3 +213,8 @@ rdd_table = df_features.rdd.map(lambda row: row[0:])
 # get the correlation matrix
 corr_mat=Statistics.corr(rdd_table, method="pearson")
 plot_corr_matrix(corr_mat, df_features.columns, 234)
+
+# COMMAND ----------
+
+# DBTITLE 1,Save Target Data as CSV
+rollingAvgsAll.write.format('csv').option('header',True).mode('overwrite').option('sep',',').save('/Filestore/tables/tmp/gdelt/preprocessed.csv')
