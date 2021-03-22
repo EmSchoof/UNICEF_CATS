@@ -153,23 +153,23 @@ days = lambda i: i * 86400
 # create a 3 day Window, 3 days days previous to the current day (row), using previous casting of timestamp to long (number of seconds)
 rolling3d_window = Window.partitionBy('ActionGeo_FullName', 'EventRootCodeString').orderBy(F.col('EventTimeDate').cast('timestamp').cast('long')).rangeBetween(-days(3), 0)
 
-# create a 30 day Window, 30 days days previous to the current day (row), using previous casting of timestamp to long (number of seconds)
-rolling30d_window = Window.partitionBy('ActionGeo_FullName', 'EventRootCodeString').orderBy(F.col('EventTimeDate').cast('timestamp').cast('long')).rangeBetween(-days(30), 0)
+# create a 60 day Window, 60 days days previous to the current day (row), using previous casting of timestamp to long (number of seconds)
+rolling60d_window = Window.partitionBy('ActionGeo_FullName', 'EventRootCodeString').orderBy(F.col('EventTimeDate').cast('timestamp').cast('long')).rangeBetween(-days(60), 0)
 
 # COMMAND ----------
 
-# DBTITLE 1,Calculate Rolling Average (RA1/RA2, modified to 30 days)
-# get 3d/30d average of the Event Report Value (ERV) within Window
+# DBTITLE 1,Calculate Rolling Average (RA1/RA2)
+# get 3d/60d average of the Event Report Value (ERV) within Window
 rollingERAs1 = gdeltTargetOutputPartitioned.withColumn('ERA_3d', F.avg('EventReportValue').over(rolling3d_window)) 
-rollingERAs = rollingERAs1.withColumn('ERA_30d', F.avg('EventReportValue').over(rolling30d_window))
+rollingERAs = rollingERAs1.withColumn('ERA_60d', F.avg('EventReportValue').over(rolling60d_window))
 
-# get 3d/30d average of the Golstein Report Value (GRV) within Window
+# get 3d/60d average of the Golstein Report Value (GRV) within Window
 rollingGRVs1 = rollingERAs.withColumn('GRA_3d', F.avg('GoldsteinReportValue').over(rolling3d_window)) 
-rollingGRVs = rollingGRVs1.withColumn('GRA_30d', F.avg('GoldsteinReportValue').over(rolling30d_window))
+rollingGRVs = rollingGRVs1.withColumn('GRA_60d', F.avg('GoldsteinReportValue').over(rolling60d_window))
 
-# get 3d/30d average of the Tone Report Value (TRV) within Window
+# get 3d/60d average of the Tone Report Value (TRV) within Window
 rollingTRVs = rollingGRVs.withColumn('TRA_3d', F.avg('ToneReportValue').over(rolling3d_window)) 
-rollingAvgsAll = rollingTRVs.withColumn('TRA_30d', F.avg('ToneReportValue').over(rolling30d_window))
+rollingAvgsAll = rollingTRVs.withColumn('TRA_60d', F.avg('ToneReportValue').over(rolling60d_window))
 rollingAvgsAll.limit(10).toPandas()
 
 # COMMAND ----------
@@ -187,36 +187,36 @@ weightedAvg = F.udf(lambda col: F.sum(F.col(col) * F.col('nArticles')) / F.sum('
 weightedERA1 = rollingAvgsAll.withColumn('weightedERA_3d_num', F.sum(F.col('ERA_3d') * F.col('nArticles')).over(rolling3d_window))
 weightedERA1 = weightedERA1.withColumn('weightedERA_3d_dem', F.sum('nArticles').over(rolling3d_window))
 weightedERA1 = weightedERA1.withColumn('weightedERA_3d', F.col('weightedERA_3d_num')/F.col('weightedERA_3d_dem'))
-# 30d
-weightedERA2 = weightedERA1.withColumn('weightedERA_30d_num', F.sum(F.col('ERA_30d') * F.col('nArticles')).over(rolling30d_window))
-weightedERA2 = weightedERA2.withColumn('weightedERA_30d_dem', F.sum('nArticles').over(rolling3d_window))
-weightedERA2 = weightedERA2.withColumn('weightedERA_30d', F.col('weightedERA_30d_num')/F.col('weightedERA_30d_dem'))
+# 60d
+weightedERA2 = weightedERA1.withColumn('weightedERA_60d_num', F.sum(F.col('ERA_60d') * F.col('nArticles')).over(rolling60d_window))
+weightedERA2 = weightedERA2.withColumn('weightedERA_60d_dem', F.sum('nArticles').over(rolling3d_window))
+weightedERA2 = weightedERA2.withColumn('weightedERA_60d', F.col('weightedERA_60d_num')/F.col('weightedERA_60d_dem'))
 
 # get 3d WEIGHTED average of the Goldstein Report Value (GRV) within Country Window
 weightedGRA1 = weightedERA2.withColumn('weightedGRA_3d_num', F.sum(F.col('GRA_3d') * F.col('nArticles')).over(rolling3d_window))
 weightedGRA1 = weightedGRA1.withColumn('weightedGRA_3d_dem', F.sum('nArticles').over(rolling3d_window))
 weightedGRA1 = weightedGRA1.withColumn('weightedGRA_3d', F.col('weightedGRA_3d_num')/F.col('weightedGRA_3d_dem'))
-# 30d
-weightedGRA2 = weightedGRA1.withColumn('weightedGRA_30d_num', F.sum(F.col('GRA_30d') * F.col('nArticles')).over(rolling30d_window))
-weightedGRA2 = weightedGRA2.withColumn('weightedGRA_30d_dem', F.sum('nArticles').over(rolling3d_window))
-weightedGRA2 = weightedGRA2.withColumn('weightedGRA_30d', F.col('weightedGRA_30d_num')/F.col('weightedGRA_30d_dem'))
+# 60d
+weightedGRA2 = weightedGRA1.withColumn('weightedGRA_60d_num', F.sum(F.col('GRA_60d') * F.col('nArticles')).over(rolling60d_window))
+weightedGRA2 = weightedGRA2.withColumn('weightedGRA_60d_dem', F.sum('nArticles').over(rolling3d_window))
+weightedGRA2 = weightedGRA2.withColumn('weightedGRA_60d', F.col('weightedGRA_60d_num')/F.col('weightedGRA_60d_dem'))
 
-# get 3d/30d WEIGHTED average of the Tone Report Value (GRV) within Country Window
+# get 3d/60d WEIGHTED average of the Tone Report Value (GRV) within Country Window
 weightedTRA1 = weightedGRA2.withColumn('weightedTRA_3d_num', F.sum(F.col('TRA_3d') * F.col('nArticles')).over(rolling3d_window))
 weightedTRA1 = weightedTRA1.withColumn('weightedTRA_3d_dem', F.sum('nArticles').over(rolling3d_window))
 weightedTRA1 = weightedTRA1.withColumn('weightedTRA_3d', F.col('weightedTRA_3d_num')/F.col('weightedTRA_3d_dem'))
-# 30d
-weightedTRA2 = weightedTRA1.withColumn('weightedTRA_30d_num', F.sum(F.col('TRA_30d') * F.col('nArticles')).over(rolling30d_window))
-weightedTRA2 = weightedTRA2.withColumn('weightedTRA_30d_dem', F.sum('nArticles').over(rolling3d_window))
-weightedRollingAvgs = weightedTRA2.withColumn('weightedTRA_30d', F.col('weightedTRA_30d_num')/F.col('weightedTRA_30d_dem'))
+# 60d
+weightedTRA2 = weightedTRA1.withColumn('weightedTRA_60d_num', F.sum(F.col('TRA_60d') * F.col('nArticles')).over(rolling60d_window))
+weightedTRA2 = weightedTRA2.withColumn('weightedTRA_60d_dem', F.sum('nArticles').over(rolling3d_window))
+weightedRollingAvgs = weightedTRA2.withColumn('weightedTRA_60d', F.col('weightedTRA_60d_num')/F.col('weightedTRA_60d_dem'))
 weightedRollingAvgs.limit(10).toPandas()
 
 # COMMAND ----------
 
 # DBTITLE 1,Select Output Data
 targetValueOutput = weightedRollingAvgs.select('ActionGeo_FullName','EventTimeDate','EventRootCodeString','nArticles','avgConfidence',
-                                          'GoldsteinReportValue','ToneReportValue','EventReportValue','weightedERA_3d','weightedERA_30d',
-                                          'weightedGRA_3d','weightedGRA_30d','weightedTRA_3d','weightedTRA_30d')
+                                          'GoldsteinReportValue','ToneReportValue','EventReportValue','weightedERA_3d','weightedERA_60d',
+                                          'weightedGRA_3d','weightedGRA_60d','weightedTRA_3d','weightedTRA_60d')
 
 print((targetValueOutput.count(), len(targetValueOutput.columns)))
 targetValueOutput.limit(2).toPandas()
@@ -236,7 +236,7 @@ def plot_corr_matrix(correlations,attr,fig_no):
     
 # select variables to check correlation
 df_features = targetValueOutput.select('nArticles','avgConfidence','GoldsteinReportValue','ToneReportValue','EventReportValue',
-                                    'weightedERA_3d','weightedERA_30d','weightedGRA_3d','weightedGRA_30d','weightedTRA_3d','weightedTRA_30d') 
+                                    'weightedERA_3d','weightedERA_60d','weightedGRA_3d','weightedGRA_60d','weightedTRA_3d','weightedTRA_60d') 
 
 # create RDD table for correlation calculation
 rdd_table = df_features.rdd.map(lambda row: row[0:])
