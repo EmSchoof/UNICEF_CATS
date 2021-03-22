@@ -45,6 +45,12 @@ preprocessedGDELT = spark.read.format("csv") \
 
 # COMMAND ----------
 
+# DBTITLE 1,Optimize CSV
+OPTIMIZE preprocessedGDELT
+  ZORDER BY (ActionGeo_FullName, EventTimeDate)
+
+# COMMAND ----------
+
 # DBTITLE 1,Select Only Conflict Events in Specific Countries
 # filter on conflict events
 conflictEvents = preprocessedGDELT.filter(F.col('QuadClassString').isin('Verbal Conflict', 'Material Conflict'))
@@ -53,6 +59,13 @@ print((conflictEvents.count(), len(conflictEvents.columns)))
 # filter on flagged countries from Horizan Scan
 conflictEventsHorizonCountries = conflictEvents.filter(F.col('ActionGeo_FullName').isin('Afghanistan','Guinea','Myanmar','Somalia'))
 print((conflictEventsHorizonCountries.count(), len(conflictEventsHorizonCountries.columns)))
+
+# COMMAND ----------
+
+# Cast Event Date columns as Date and Select Data for the Month of February
+conflictEventsHorizonCountries = conflictEventsHorizonCountries.withColumn('EventTimeDate', F.col('EventTimeDate').cast('date'))
+conflictEventsHorizonCountries = conflictEventsHorizonCountries.filter( (F.col('EventTimeDate') >= F.lit('2021-02-01')) & (F.col('EventTimeDate') < F.lit('2021-03-01' )))
+conflictEventsHorizonCountries.select('EventTimeDate').describe().show()
 conflictEventsHorizonCountries.limit(10).toPandas()
 
 # COMMAND ----------
