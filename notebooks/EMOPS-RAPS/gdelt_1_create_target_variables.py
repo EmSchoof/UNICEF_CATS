@@ -189,7 +189,7 @@ weightedERA1 = weightedERA1.withColumn('weightedERA_3d_dem', F.sum('nArticles').
 weightedERA1 = weightedERA1.withColumn('weightedERA_3d', F.col('weightedERA_3d_num')/F.col('weightedERA_3d_dem'))
 # 60d
 weightedERA2 = weightedERA1.withColumn('weightedERA_60d_num', F.sum(F.col('ERA_60d') * F.col('nArticles')).over(rolling60d_window))
-weightedERA2 = weightedERA2.withColumn('weightedERA_60d_dem', F.sum('nArticles').over(rolling3d_window))
+weightedERA2 = weightedERA2.withColumn('weightedERA_60d_dem', F.sum('nArticles').over(rolling60d_window))
 weightedERA2 = weightedERA2.withColumn('weightedERA_60d', F.col('weightedERA_60d_num')/F.col('weightedERA_60d_dem'))
 
 # get 3d WEIGHTED average of the Goldstein Report Value (GRV) within Country Window
@@ -198,7 +198,7 @@ weightedGRA1 = weightedGRA1.withColumn('weightedGRA_3d_dem', F.sum('nArticles').
 weightedGRA1 = weightedGRA1.withColumn('weightedGRA_3d', F.col('weightedGRA_3d_num')/F.col('weightedGRA_3d_dem'))
 # 60d
 weightedGRA2 = weightedGRA1.withColumn('weightedGRA_60d_num', F.sum(F.col('GRA_60d') * F.col('nArticles')).over(rolling60d_window))
-weightedGRA2 = weightedGRA2.withColumn('weightedGRA_60d_dem', F.sum('nArticles').over(rolling3d_window))
+weightedGRA2 = weightedGRA2.withColumn('weightedGRA_60d_dem', F.sum('nArticles').over(rolling60d_window))
 weightedGRA2 = weightedGRA2.withColumn('weightedGRA_60d', F.col('weightedGRA_60d_num')/F.col('weightedGRA_60d_dem'))
 
 # get 3d/60d WEIGHTED average of the Tone Report Value (GRV) within Country Window
@@ -207,7 +207,7 @@ weightedTRA1 = weightedTRA1.withColumn('weightedTRA_3d_dem', F.sum('nArticles').
 weightedTRA1 = weightedTRA1.withColumn('weightedTRA_3d', F.col('weightedTRA_3d_num')/F.col('weightedTRA_3d_dem'))
 # 60d
 weightedTRA2 = weightedTRA1.withColumn('weightedTRA_60d_num', F.sum(F.col('TRA_60d') * F.col('nArticles')).over(rolling60d_window))
-weightedTRA2 = weightedTRA2.withColumn('weightedTRA_60d_dem', F.sum('nArticles').over(rolling3d_window))
+weightedTRA2 = weightedTRA2.withColumn('weightedTRA_60d_dem', F.sum('nArticles').over(rolling60d_window))
 weightedRollingAvgs = weightedTRA2.withColumn('weightedTRA_60d', F.col('weightedTRA_60d_num')/F.col('weightedTRA_60d_dem'))
 weightedRollingAvgs.limit(10).toPandas()
 
