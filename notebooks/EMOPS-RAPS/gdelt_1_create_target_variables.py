@@ -214,11 +214,12 @@ weightedRollingAvgs.limit(10).toPandas()
 # COMMAND ----------
 
 # DBTITLE 1,Select Output Data
-targetValues = weightedRollingAvgs.select('ActionGeo_FullName','EventTimeDate','EventRootCodeString','nArticles','avgConfidence',
+targetValueOutput = weightedRollingAvgs.select('ActionGeo_FullName','EventTimeDate','EventRootCodeString','nArticles','avgConfidence',
                                           'GoldsteinReportValue','ToneReportValue','EventReportValue','weightedERA_3d','weightedERA_30d',
                                           'weightedGRA_3d','weightedGRA_30d','weightedTRA_3d','weightedTRA_30d')
 
-# 
+print((targetValueOutput.count(), len(targetValueOutput.columns)))
+targetValueOutput.limit(2).toPandas()
 
 # COMMAND ----------
 
@@ -234,7 +235,8 @@ def plot_corr_matrix(correlations,attr,fig_no):
     plt.show()
     
 # select variables to check correlation
-df_features = rollingAvgsAll.select('avgConfidence','nArticles','ToneReportValue','GoldsteinReportValue','EventReportValue') 
+df_features = targetValueOutput.select('nArticles','avgConfidence','GoldsteinReportValue','ToneReportValue','EventReportValue',
+                                    'weightedERA_3d','weightedERA_30d','weightedGRA_3d','weightedGRA_30d','weightedTRA_3d','weightedTRA_30d') 
 
 # create RDD table for correlation calculation
 rdd_table = df_features.rdd.map(lambda row: row[0:])
@@ -246,4 +248,4 @@ plot_corr_matrix(corr_mat, df_features.columns, 234)
 # COMMAND ----------
 
 # DBTITLE 1,Save Target Data as CSV
-rollingAvgsAll.write.format('csv').option('header',True).mode('overwrite').option('sep',',').save('/Filestore/tables/tmp/gdelt/preprocessed.csv')
+targetValueOutput.write.format('csv').option('header',True).mode('overwrite').option('sep',',').save('/Filestore/tables/tmp/gdelt/targetvalues.csv')
