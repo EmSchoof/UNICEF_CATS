@@ -93,12 +93,6 @@ print((eventsDataNonConflict.count(), len(eventsDataNonConflict.columns)))
 
 # COMMAND ----------
 
-# MAGIC %md
-# MAGIC 
-# MAGIC ### Compare Distribution of EventReportValue Rolling Averages for Conflict vs Not Events
-
-# COMMAND ----------
-
 def plot_boxplot(var_list, title):
   
   # Add boxplot for var
@@ -157,7 +151,7 @@ def plot_ecdf(vals_list, title):
       # Label figure
       plt.xlabel(title)
       fig = plt.ylabel('CDF')
-      fig = plt.legend(('Sample Population', 'Theoretical Norm'))
+      fig = plt.legend(('Sample Population', 'Theoretical Norm'), loc='lower right')
       fig = plt.title('Variable ECDF Distribution Compared to Statistical Norm')
 
       # Save plots
@@ -179,51 +173,65 @@ def plot_dist(df, col):
 
 # COMMAND ----------
 
+def conflict_eda_funcs(col): 
+  
+  # get lists
+  list_conflict = eventsData.select(col).rdd.flatMap(lambda x: x).collect()
+  
+  # get quantiles
+  print('Get Conflict Quantiles for ' + col)
+  get_quantiles(eventsDataConflict, col)
+  plot_boxplot(list_conflict, col)
+  
+  # plot dist
+  plot_dist(eventsDataConflict, col)
+  
+  # plot ecdf
+  plot_ecdf(list_conflict, 'CONFLICT ' + col)
+
+# COMMAND ----------
+
+def nonconflict_eda_funcs(col): 
+  
+  # get lists
+  list_not = eventsDataNonConflict.select(col).rdd.flatMap(lambda x: x).collect()
+  
+  # get quantiles
+  print('Get Non-Conflict Quantiles for ' + col)
+  get_quantiles(eventsDataNonConflict, col)
+  plot_boxplot(list_not, col)
+  
+  # plot dist
+  plot_dist(eventsDataNonConflict, col)
+ 
+  # plot ecdf
+  plot_ecdf(list_not, 'NON-CONFLICT ' + col)
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC ### ERV
+
+# COMMAND ----------
+
+ conflict_eda_funcs('EventReportValue')
+
+# COMMAND ----------
+
+nonconflict_eda_funcs('EventReportValue')
+
+# COMMAND ----------
+
 # MAGIC %md
 # MAGIC ### Weighted ERA 3D
 
 # COMMAND ----------
 
-wERA_3_conflict = eventsData.select('weightedERA_3d').rdd.flatMap(lambda x: x).collect()
-wERA_3_not = eventsDataNonConflict.select('weightedERA_3d').rdd.flatMap(lambda x: x).collect()
+ conflict_eda_funcs('weightedERA_3d')
 
 # COMMAND ----------
 
-# MAGIC %md 
-# MAGIC #### Conflict
-
-# COMMAND ----------
-
-print('Get Conflict Quantiles for Weighted ERA 3D: ')
-get_quantiles(eventsDataConflict, 'weightedERA_3d')
-plot_boxplot(wERA_3_conflict, 'weightedERA_3d')
-
-# COMMAND ----------
-
-plot_dist(eventsDataConflict, 'weightedERA_3d')
-
-# COMMAND ----------
-
-plot_ecdf(wERA_3_conflict, 'CONFLICT ERV 3d Rolling Averages')
-
-# COMMAND ----------
-
-# MAGIC %md 
-# MAGIC #### Non-Conflict
-
-# COMMAND ----------
-
-print('Get Non-Conflict Quantiles for Weighted ERA 3D: ')
-get_quantiles(eventsDataNonConflict, 'weightedERA_3d')
-plot_boxplot(wERA_3_not, 'weightedERA_3d')
-
-# COMMAND ----------
-
-plot_dist(eventsDataNonConflict, 'weightedERA_3d')
-
-# COMMAND ----------
-
-plot_ecdf(wERA_3_not, 'NON-CONFLICT ERV 3d Rolling Averages')
+ nonconflict_eda_funcs('weightedERA_3d')
 
 # COMMAND ----------
 
@@ -232,45 +240,16 @@ plot_ecdf(wERA_3_not, 'NON-CONFLICT ERV 3d Rolling Averages')
 
 # COMMAND ----------
 
-wERA_60_conflict = eventsDataConflict.select('weightedERA_60d').rdd.flatMap(lambda x: x).collect()
-wERA_60_not = eventsDataNonConflict.select('weightedERA_60d').rdd.flatMap(lambda x: x).collect()
+ conflict_eda_funcs('weightedERA_60d')
 
 # COMMAND ----------
 
-# MAGIC %md 
-# MAGIC #### Conflict
+nonconflict_eda_funcs('weightedERA_60d')
 
 # COMMAND ----------
 
-print('Get Conflict Quantiles for Weighted ERA 60D: ')
-get_quantiles(eventsDataConflict, 'weightedERA_60d')
-plot_boxplot(wERA_60_conflict, 'weightedERA_60d')
-
-# COMMAND ----------
-
-print('Get Conflict Quantiles for Weighted ERA 60D: ')
-get_quantiles(eventsDataConflict, 'weightedERA_60d')
-plot_dist(eventsDataConflict, 'weightedERA_60d')
-
-# COMMAND ----------
-
-plot_ecdf(wERA_60_conflict, 'CONFLICT ERV 60d Rolling Averages')
-
-# COMMAND ----------
-
-# MAGIC %md 
-# MAGIC #### Non-Conflict
-
-# COMMAND ----------
-
-print('Get Non-Conflict Quantiles for Weighted ERA 60D: ')
-get_quantiles(eventsDataNonConflict, 'weightedERA_60d')
-plot_boxplot(wERA_60_not, 'weightedERA_60d')
-
-# COMMAND ----------
-
-plot_dist(eventsDataNonConflict, 'weightedERA_60d')
-
-# COMMAND ----------
-
-plot_ecdf(wERA_60_not, 'NON-CONFLICT ERV 60d Rolling Averages')
+# MAGIC %md
+# MAGIC 
+# MAGIC #### Initial Conclusion:
+# MAGIC All versions of the EventReportValue (Daily and Rolling Averages) in both Conflict and Non-Conflict events have a skewed-right distribution. This generally means that the mean and median are both greater than the mode, and the mean is greater than median. In order to account for these inconsistencies, the following steps with log-transform these variables
+# MAGIC [source](https://towardsdatascience.com/skewed-data-a-problem-to-your-statistical-model-9a6b5bb74e37)
