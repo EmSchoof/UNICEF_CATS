@@ -13,9 +13,9 @@
 # MAGIC -	Period of Analysis 1 (PA1): 3 days
 # MAGIC -	Period of Analysis 2 (PA2): 60 days 
 # MAGIC -	Event spike alert: 
-# MAGIC When the *Event Report Value* for a given PA1 (*3 DAYS*) is one standard deviation above ERA1* 
+# MAGIC When the *Event Report Value* for a given PA1 (*3 DAYS*) is <strike>one standard deviation</strike>  above ERA1* 
 # MAGIC -	Event trend alert: 
-# MAGIC when the *Event Report Value* for a given PA2 (*60 DAYS*) is one standard deviation above ERA2*
+# MAGIC when the *Event Report Value* for a given PA2 (*60 DAYS*) is <strike>one standard deviation</strike>  above ERA2*
 # MAGIC 
 # MAGIC 
 # MAGIC Sources:
