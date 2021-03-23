@@ -8,8 +8,19 @@ from pyspark.sql.types import *
 # COMMAND ----------
 
 # DBTITLE 1,Import Data from Big Query
-bq_gdelt = spark.read.format("bigquery").option("table",'unicef-gdelt.february2021.events-mentions').load()
-print((bq_gdelt.count(), len(bq_gdelt.columns)))
+# import january
+bq_gdelt_jan = spark.read.format("bigquery").option("table",'unicef-gdelt.january2021.events-mentions').load()
+print('January 2021 Event-Mentions Data: ', (bq_gdelt_jan.count(), len(bq_gdelt_jan.columns)))
+
+# import february
+bq_gdelt_feb = spark.read.format("bigquery").option("table",'unicef-gdelt.february2021.events-mentions').load()
+print('February 2021 Event-Mentions Data: ', (bq_gdelt_feb.count(), len(bq_gdelt_feb.columns)))
+
+# COMMAND ----------
+
+# merge dataframes
+bq_gdelt = bq_gdelt_jan.union(bq_gdelt_feb)
+print('January and February 2021 Event-Mentions Data: ', (bq_gdelt.count(), len(bq_gdelt.columns)))
 bq_gdelt.limit(10).toPandas()
 
 # COMMAND ----------
@@ -134,12 +145,16 @@ gdeltFebNoNulls.limit(5).toPandas()
 gdeltFebNoNulls = gdeltFebNoNulls.withColumn('EventTimeDate', F.expr("CAST(EventTimeDate AS STRING)"))
 gdeltFebNoNulls = gdeltFebNoNulls.withColumn('MentionTimeDate', F.expr("CAST(MentionTimeDate AS STRING)"))
 
+# Confirm output
+gdeltFebNoNulls.limit(2).toPandas()
+
+# COMMAND ----------
+
 # Convert date-strings to date columns
-gdeltFebNoNulls = gdeltFebNoNulls.withColumn('EventTimeDate', F.to_date(F.unix_timestamp(F.col('EventTimeDate'), 'yyyyMMddHHmmss').cast("timestamp")))
-gdeltFebNoNulls = gdeltFebNoNulls.withColumn('MentionTimeDate', F.to_date(F.unix_timestamp(F.col('MentionTimeDate'), 'yyyyMMddHHmmss').cast("timestamp")))
+gdeltFebNoNulls = gdeltFebNoNulls.withColumn('EventTimeDate', F.date(F.unix_timestamp(F.col('EventTimeDate'), 'yyyyMMddHHmmss').cast("timestamp")))
+gdeltFebNoNulls = gdeltFebNoNulls.withColumn('MentionTimeDate', F.date(F.unix_timestamp(F.col('MentionTimeDate'), 'yyyyMMddHHmmss').cast("timestamp")))
 
 # Confirm output
-gdeltFebNoNulls.printSchema()
 gdeltFebNoNulls.limit(2).toPandas()
 
 # COMMAND ----------
@@ -293,7 +308,10 @@ gdeltFebNoNullsSelectDFIPS = gdeltFebNoNullsSelectD.withColumn(
     .when(F.col('ActionGeo_CountryCode') == 'DA', "Denmark")
     .when(F.col('ActionGeo_CountryCode') == 'UP', "Ukraine")
     .when(F.col('ActionGeo_CountryCode') == 'HQ', "Howland Island")
-    .when(F.col('ActionGeo_CountryCode') == 'VM', "Vietnam")    
+    .when(F.col('ActionGeo_CountryCode') == 'VM', "Vietnam")
+    .when(F.col('ActionGeo_CountryCode') == 'JN', "Jan Mayen")
+    .when(F.col('ActionGeo_CountryCode') == 'LQ', "Palmyra Atoll")
+    .when(F.col('ActionGeo_CountryCode') == 'JQ', "Johnston Atoll")
     .otherwise(F.col('ActionGeo_FullName'))
 )
 
@@ -377,20 +395,6 @@ outputPreprocessedGDELT.agg(F.countDistinct(F.col("GLOBALEVENTID")).alias("nEven
 
 print(outputPreprocessedGDELT.columns)
 outputPreprocessedGDELT.limit(10).toPandas()
-
-# COMMAND ----------
-
-# MAGIC %md
-# MAGIC Create Target Variable Columns
-# MAGIC 
-# MAGIC - select specific columns for output
-# MAGIC gbcolumns = ['GLOBALEVENTID','EventTimeDate','ActionGeo_FullName','QuadClassString','EventRootCodeString','ActionGeo_Lat','ActionGeo_Long']
-# MAGIC 
-# MAGIC - group data based on desired output
-# MAGIC groupedCountryEvents = preprocessedGDELT.groupBy(gbcolumns).agg(F.avg('Confidence'),F.avg('MentionDocTone'),F.avg('GoldsteinScale'),F.sum('nArticles'))
-# MAGIC 
-# MAGIC - verify output
-# MAGIC groupedCountryEvents.limit(10).toPandas()
 
 # COMMAND ----------
 
