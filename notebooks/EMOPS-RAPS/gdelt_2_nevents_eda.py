@@ -39,6 +39,7 @@ from pyspark.sql import DataFrame
 import pyspark.sql.functions as F
 from pyspark.sql.types import *
 from pyspark.sql.window import Window
+import seaborn as sns
 
 # COMMAND ----------
 
@@ -72,27 +73,54 @@ eventsData.limit(2).toPandas()
 # create conflict column
 conflict_events = ['DEMAND','DISAPPROVE','PROTEST','REJECT','THREATEN','ASSAULT','COERCE','ENGAGE IN UNCONVENTIONAL MASS VIOLENCE','EXHIBIT MILITARY POSTURE','FIGHT','REDUCE RELATIONS']
 eventsData = eventsData.withColumn('if_conflict', F.when(F.col('EventRootCodeString').isin(conflict_events), True).otherwise(False))
-eventsData.limit(10).toPandas()
 
 # COMMAND ----------
 
-eventsDataConflict = eventsData.filter(F.col('if_conflict') == True)
-eventsDataNonConflict = eventsData.filter(F.col('if_conflict') != True)
+# It's a best practice to sample data from your Spark df into pandas
+sub_eventsData = eventsData.sample(withReplacement=False, fraction=0.5, seed=42)
+
+# separate into conflict vs not 
+eventsDataConflict = sub_eventsData.filter(F.col('if_conflict') == True)
+print((eventsDataConflict.count(), len(eventsDataConflict.columns)))
+eventsDataNonConflict = sub_eventsData.filter(F.col('if_conflict') != True)
+print((eventsDataNonConflict.count(), len(eventsDataNonConflict.columns)))
+
+# COMMAND ----------
+
+# MAGIC %md 
+# MAGIC ## Plot
+
+# COMMAND ----------
+
+plt.rcParams["figure.figsize"] = (16,8)
+from pyspark_dist_explore import hist
+import pylab as pl
+import seaborn as sns
+import scipy.stats as stats
+# Seed the random number generator
+np.random.seed(15)
+
+# COMMAND ----------
+
+# DBTITLE 1,Sample Dataframes and Plot
+# Sample spark df and plot 
+# It's a best practice to sample data from your Spark df into pandas
+sub_eventsData = eventsData.sample(withReplacement=False, fraction=0.5, seed=42)
+
+# Create a Pandas df from a subset of columns, those that are sampled
+sub_eventsData_df = sub_eventsData.toPandas() 
+
+# A basic seaborn linear model plot
+sns.lmplot(y='EventReportValue', x='EventRootCodeString', data=sub_eventsData_df)
+
+#eventsDataConflict = sub_eventsData.filter(F.col('if_conflict') == True)
+#eventsDataNonConflict = sub_eventsData.filter(F.col('if_conflict') != True)
 
 # COMMAND ----------
 
 # MAGIC %md
 # MAGIC 
 # MAGIC ### Compare Distribution of EventReportValue Rolling Averages for Conflict vs Not Events
-
-# COMMAND ----------
-
-plt.rcParams["figure.figsize"] = (16,8)
-import pylab as pl
-import seaborn as sns
-import scipy.stats as stats
-# Seed the random number generator
-np.random.seed(15)
 
 # COMMAND ----------
 
@@ -136,7 +164,7 @@ def plot_ecdf(vals_list, title):
       fig = plt.plot(x_norm, y_norm, marker='.', linestyle='none', alpha=0.5)
 
       # Label figure
-      pl.xlabel(title)
+      plt.xlabel(title)
       fig = plt.ylabel('CDF')
       fig = plt.legend(('Sample Population', 'Theoretical Norm'))
       fig = plt.title('Variable ECDF Distribution Compared to Statistical Norm')
@@ -146,32 +174,53 @@ def plot_ecdf(vals_list, title):
 
 # COMMAND ----------
 
+def plot_dist(df, col):
+  
+    # Plot distribution of a features
+    # Select a single column and sample and convert to pandas
+    sample_df = df.select(col).sample(False, 0.5, 42)
+    pandas_df = sample_df.toPandas()
+
+    # Plot distribution of pandas_df and display plot
+    sns.distplot(pandas_df)
+    plt.xlabel(col) 
+    plt.show()
+
+# COMMAND ----------
+
 # MAGIC %md
 # MAGIC ### Weighted ERA 3D
 
 # COMMAND ----------
 
-print('Number of Nulls: ', eventsData.filter(F.col('weightedERA_3d').isNull()).count())
-eventsData.select('weightedERA_3d').describe().show()
-
-# COMMAND ----------
-
-# DBTITLE 1,Get Quantiles
-print('Get Conflict Quantiles for Weighted ERA 3D: ')
-get_quantiles(eventsDataConflict, 'weightedERA_3d')
-print('')
-print('')
-print('Get Non-Conflict Quantiles for Weighted ERA 3D: ')
-get_quantiles(eventsDataNonConflict, 'weightedERA_3d')
-
-# COMMAND ----------
-
-wERA_3_conflict = eventsDataConflict.select('weightedERA_3d').rdd.flatMap(lambda x: x).collect()
+wERA_3_conflict = eventsData.select('weightedERA_3d').rdd.flatMap(lambda x: x).collect()
 wERA_3_not = eventsDataNonConflict.select('weightedERA_3d').rdd.flatMap(lambda x: x).collect()
 
 # COMMAND ----------
 
+# MAGIC %md 
+# MAGIC #### Conflict
+
+# COMMAND ----------
+
+print('Get Conflict Quantiles for Weighted ERA 3D: ')
+get_quantiles(eventsDataConflict, 'weightedERA_3d')
+plot_dist(eventsDataConflict, 'weightedERA_3d')
+
+# COMMAND ----------
+
 plot_ecdf(wERA_3_conflict, 'CONFLICT ERV 3d Rolling Averages')
+
+# COMMAND ----------
+
+# MAGIC %md 
+# MAGIC #### Non-Conflict
+
+# COMMAND ----------
+
+print('Get Non-Conflict Quantiles for Weighted ERA 3D: ')
+get_quantiles(eventsDataNonConflict, 'weightedERA_3d')
+plot_dist(eventsDataNonConflict, 'weightedERA_3d')
 
 # COMMAND ----------
 
@@ -184,23 +233,19 @@ plot_ecdf(wERA_3_not, 'NON-CONFLICT ERV 3d Rolling Averages')
 
 # COMMAND ----------
 
-print('Number of Nulls: ', eventsData.filter(F.col('weightedERA_60d').isNull()).count())
-eventsData.select('weightedERA_60d').describe().show()
-
-# COMMAND ----------
-
-# DBTITLE 1,Get Quantiles
-print('Get Conflict Quantiles for Weighted ERA 60D: ')
-get_quantiles(eventsDataConflict, 'weightedERA_60d')
-print('')
-print('')
-print('Get Non-Conflict Quantiles for Weighted ERA 60D: ')
-get_quantiles(eventsDataNonConflict, 'weightedERA_60d')
-
-# COMMAND ----------
-
 wERA_60_conflict = eventsDataConflict.select('weightedERA_60d').rdd.flatMap(lambda x: x).collect()
 wERA_60_not = eventsDataNonConflict.select('weightedERA_60d').rdd.flatMap(lambda x: x).collect()
+
+# COMMAND ----------
+
+# MAGIC %md 
+# MAGIC #### Conflict
+
+# COMMAND ----------
+
+print('Get Conflict Quantiles for Weighted ERA 60D: ')
+get_quantiles(eventsDataConflict, 'weightedERA_60d')
+plot_dist(eventsDataConflict, 'weightedERA_60d')
 
 # COMMAND ----------
 
@@ -208,7 +253,15 @@ plot_ecdf(wERA_60_conflict, 'CONFLICT ERV 60d Rolling Averages')
 
 # COMMAND ----------
 
-plot_ecdf(wERA_60_not, 'NON-CONFLICT ERV 60d Rolling Averages')
+# MAGIC %md 
+# MAGIC #### Non-Conflict
 
 # COMMAND ----------
 
+print('Get Non-Conflict Quantiles for Weighted ERA 60D: ')
+get_quantiles(eventsDataNonConflict, 'weightedERA_60d')
+plot_dist(eventsDataNonConflict, 'weightedERA_60d')
+
+# COMMAND ----------
+
+plot_ecdf(wERA_60_not, 'NON-CONFLICT ERV 60d Rolling Averages')
