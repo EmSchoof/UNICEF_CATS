@@ -39,9 +39,9 @@
 # MAGIC 
 # MAGIC - 	Tone point value (TPV): 
 # MAGIC Calculated as the average Mention Tone for all articles tagged as associated to the country
-# MAGIC -	Goldstein Running Average (TRA1):
+# MAGIC -	Tone Running Average (TRA1):
 # MAGIC Calculated as the rolling average of the TPV for PA1 over the previous 12 months
-# MAGIC -	Goldstein Running Average (TRA2):
+# MAGIC -	Tone Running Average (TRA2):
 # MAGIC Calculated as the rolling average of the TPV for PA2 over the previous 24 months
 # MAGIC -	Tone spike alert: 
 # MAGIC When the *Tone Point Value* for a given PA1 (*3 DAYS*) is one standard deviation above ERA1* 
