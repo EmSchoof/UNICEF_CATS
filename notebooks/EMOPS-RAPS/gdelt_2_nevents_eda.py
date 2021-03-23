@@ -39,6 +39,7 @@ from pyspark.sql import DataFrame
 import pyspark.sql.functions as F
 from pyspark.sql.types import *
 from pyspark.sql.window import Window
+import scipy.stats as stats
 import seaborn as sns
 
 # COMMAND ----------
@@ -92,35 +93,25 @@ print((eventsDataNonConflict.count(), len(eventsDataNonConflict.columns)))
 
 # COMMAND ----------
 
-plt.rcParams["figure.figsize"] = (16,8)
-from pyspark_dist_explore import hist
-import pylab as pl
-import seaborn as sns
-import scipy.stats as stats
-# Seed the random number generator
-np.random.seed(15)
-
-# COMMAND ----------
-
-# DBTITLE 1,Sample Dataframes and Plot
-# Sample spark df and plot 
-# It's a best practice to sample data from your Spark df into pandas
-sub_eventsData = eventsData.sample(withReplacement=False, fraction=0.5, seed=42)
-
-# Create a Pandas df from a subset of columns, those that are sampled
-sub_eventsData_df = sub_eventsData.toPandas() 
-
-# A basic seaborn linear model plot
-sns.lmplot(y='EventReportValue', x='EventRootCodeString', data=sub_eventsData_df)
-
-#eventsDataConflict = sub_eventsData.filter(F.col('if_conflict') == True)
-#eventsDataNonConflict = sub_eventsData.filter(F.col('if_conflict') != True)
-
-# COMMAND ----------
-
 # MAGIC %md
 # MAGIC 
 # MAGIC ### Compare Distribution of EventReportValue Rolling Averages for Conflict vs Not Events
+
+# COMMAND ----------
+
+def plot_boxplot(var_list, title):
+  
+  # Add boxplot for var
+  sns.boxplot(var_list)
+
+  # Label axis 
+  plt.xlabel(title)
+  plt.ylabel('Probability Density Function')
+  plt.title('Distribution of ' + title)
+
+  # Show plot and add print mean and std sample information
+  plt.show()
+  'The sample(n=' + str(len(var_list)) + ') population mean is ' + str(round(np.mean(var_list), 2)) + ' with a standard deviation of ' + str(round(np.std(var_list), 2)) + '.'
 
 # COMMAND ----------
 
@@ -205,6 +196,10 @@ wERA_3_not = eventsDataNonConflict.select('weightedERA_3d').rdd.flatMap(lambda x
 
 print('Get Conflict Quantiles for Weighted ERA 3D: ')
 get_quantiles(eventsDataConflict, 'weightedERA_3d')
+plot_boxplot(wERA_3_conflict, 'weightedERA_3d')
+
+# COMMAND ----------
+
 plot_dist(eventsDataConflict, 'weightedERA_3d')
 
 # COMMAND ----------
@@ -220,6 +215,10 @@ plot_ecdf(wERA_3_conflict, 'CONFLICT ERV 3d Rolling Averages')
 
 print('Get Non-Conflict Quantiles for Weighted ERA 3D: ')
 get_quantiles(eventsDataNonConflict, 'weightedERA_3d')
+plot_boxplot(wERA_3_not, 'weightedERA_3d')
+
+# COMMAND ----------
+
 plot_dist(eventsDataNonConflict, 'weightedERA_3d')
 
 # COMMAND ----------
@@ -245,6 +244,12 @@ wERA_60_not = eventsDataNonConflict.select('weightedERA_60d').rdd.flatMap(lambda
 
 print('Get Conflict Quantiles for Weighted ERA 60D: ')
 get_quantiles(eventsDataConflict, 'weightedERA_60d')
+plot_boxplot(wERA_60_conflict, 'weightedERA_60d')
+
+# COMMAND ----------
+
+print('Get Conflict Quantiles for Weighted ERA 60D: ')
+get_quantiles(eventsDataConflict, 'weightedERA_60d')
 plot_dist(eventsDataConflict, 'weightedERA_60d')
 
 # COMMAND ----------
@@ -260,6 +265,10 @@ plot_ecdf(wERA_60_conflict, 'CONFLICT ERV 60d Rolling Averages')
 
 print('Get Non-Conflict Quantiles for Weighted ERA 60D: ')
 get_quantiles(eventsDataNonConflict, 'weightedERA_60d')
+plot_boxplot(wERA_60_not, 'weightedERA_60d')
+
+# COMMAND ----------
+
 plot_dist(eventsDataNonConflict, 'weightedERA_60d')
 
 # COMMAND ----------
