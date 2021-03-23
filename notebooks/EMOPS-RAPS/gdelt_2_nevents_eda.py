@@ -251,5 +251,6 @@ nonconflict_eda_funcs('weightedERA_60d')
 # MAGIC %md
 # MAGIC 
 # MAGIC #### Initial Conclusion:
-# MAGIC All versions of the EventReportValue (Daily and Rolling Averages) in both Conflict and Non-Conflict events have a skewed-right distribution. This generally means that the mean and median are both greater than the mode, and the mean is greater than median. In order to account for these inconsistencies, the following steps with log-transform these variables
-# MAGIC [source](https://towardsdatascience.com/skewed-data-a-problem-to-your-statistical-model-9a6b5bb74e37)
+# MAGIC All versions of the EventReportValue (Daily and Rolling Averages) in both Conflict and Non-Conflict events have a skewed-right distribution. This generally means that the mean and median are both greater than the mode, and the mean is greater than median. Since the purpose of this assessment is to be able to detect a statistical change in the percent Articles (EventReportValue) rolling averages that could indicate an increasing trend in conflict events within a given country, a non-parametric test (ie. Kruskai-Wallis) is more accurate than comparing the change in standard deviation, which is a form of descriptive statistics that is reliant on normal distribution for clear, useful, interpretation.  
+# MAGIC - [Medium: Skewed Data](https://towardsdatascience.com/skewed-data-a-problem-to-your-statistical-model-9a6b5bb74e37)
+# MAGIC - [Non-Parametric Statistics](http://erecursos.uacj.mx/bitstream/handle/20.500.11961/2064/Gibbons%2C%202003.pdf?sequence=14&isAllowed=y)
