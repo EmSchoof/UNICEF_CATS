@@ -261,6 +261,19 @@ weightedERA_60d_nonconflict = nonconflict_eda_funcs('weightedERA_60d')
 # MAGIC 
 # MAGIC 
 # MAGIC As mentioned above, the Kruskal-Wallis H-test is the non-parametric version of ANOVA tests, which the null hypothesis that the population median of all of the groups are equal. The test works on 2 or more independent samples, which may have different sizes, and makes the assumption that H has a chi square distribution. Since the rejection the null hypothesis does not indicate which of the groups differs, a post hoc comparisons between the groups is required to determine which groups are different. [source](https://docs.scipy.org/doc/scipy/reference/generated/scipy.stats.kruskal.html)
+# MAGIC 
+# MAGIC 
+# MAGIC #### Assumptions for Kruskal-Wallis H-test:
+# MAGIC - *Assumption #1*: The dependent variable is a continuous or ordinal variable
+# MAGIC   - EventReportValue et.al is a percentage, which is a type of continuous variable measured between 0 and 1
+# MAGIC - *Assumption #2*: The independent variable should consist of 2 or more categorical, independent groups.
+# MAGIC   - When grouping at the country level, there are 4 categorical groups for QuadClass, which can be subdivided in to 20 independent categories of EventRootCodes. 
+# MAGIC   - For the initial iteration of this analysis, QuadClass will be grouped into 2 categorical, independent groups: Conflict vs Non-Conflict.
+# MAGIC - *Assumption #3*: There is independence of observations, which means that there is no relationship between the observations in each group or between the groups themselves.
+# MAGIC   - When grouping at the country level, each global event and respective calculated EventReportValue is entirely independents of other entries.
+# MAGIC - *Assumption #4*: The distribution of each dependent variable categorical group has been explored; if the distributions are similar the median will be assessed, else the mean.
+# MAGIC 
+# MAGIC [source](https://statistics.laerd.com/spss-tutorials/kruskal-wallis-h-test-using-spss-statistics.php)
 
 # COMMAND ----------
 
