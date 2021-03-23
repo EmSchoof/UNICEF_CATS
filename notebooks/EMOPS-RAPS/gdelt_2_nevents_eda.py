@@ -188,6 +188,8 @@ def conflict_eda_funcs(col):
   
   # plot ecdf
   plot_ecdf(list_conflict, 'CONFLICT ' + col)
+  
+  return list_conflict
 
 # COMMAND ----------
 
@@ -206,6 +208,8 @@ def nonconflict_eda_funcs(col):
  
   # plot ecdf
   plot_ecdf(list_not, 'NON-CONFLICT ' + col)
+  
+  return list_not
 
 # COMMAND ----------
 
@@ -214,11 +218,11 @@ def nonconflict_eda_funcs(col):
 
 # COMMAND ----------
 
- conflict_eda_funcs('EventReportValue')
+erv_conflict = conflict_eda_funcs('EventReportValue')
 
 # COMMAND ----------
 
-nonconflict_eda_funcs('EventReportValue')
+erv_nonconflict = nonconflict_eda_funcs('EventReportValue')
 
 # COMMAND ----------
 
@@ -227,11 +231,11 @@ nonconflict_eda_funcs('EventReportValue')
 
 # COMMAND ----------
 
- conflict_eda_funcs('weightedERA_3d')
+weightedERA_3d_conflict = conflict_eda_funcs('weightedERA_3d')
 
 # COMMAND ----------
 
- nonconflict_eda_funcs('weightedERA_3d')
+ weightedERA_3d_nonconflict = nonconflict_eda_funcs('weightedERA_3d')
 
 # COMMAND ----------
 
@@ -240,17 +244,38 @@ nonconflict_eda_funcs('EventReportValue')
 
 # COMMAND ----------
 
- conflict_eda_funcs('weightedERA_60d')
+weightedERA_60d_conflict = conflict_eda_funcs('weightedERA_60d')
 
 # COMMAND ----------
 
-nonconflict_eda_funcs('weightedERA_60d')
+weightedERA_60d_nonconflict = nonconflict_eda_funcs('weightedERA_60d')
 
 # COMMAND ----------
 
 # MAGIC %md
 # MAGIC 
 # MAGIC #### Initial Conclusion:
-# MAGIC All versions of the EventReportValue (Daily and Rolling Averages) in both Conflict and Non-Conflict events have a skewed-right distribution. This generally means that the mean and median are both greater than the mode, and the mean is greater than median. Since the purpose of this assessment is to be able to detect a statistical change in the percent Articles (EventReportValue) rolling averages that could indicate an increasing trend in conflict events within a given country, a non-parametric test (ie. Kruskai-Wallis) is more accurate than comparing the change in standard deviation, which is a form of descriptive statistics that is reliant on normal distribution for clear, useful, interpretation.  
+# MAGIC All versions of the EventReportValue (Daily and Rolling Averages) in both Conflict and Non-Conflict events have a skewed-right distribution. This generally means that the mean and median are both greater than the mode, and the mean is greater than median. While the Central Limit Theorem (CLT) states that, in many situations, when independent random variables are added, their properly normalized sum tends toward a normal distribution (informally a bell curve) even if the original variables themselves are not normally distributed, non-parametirc statistics are more accurate to perform on data that does not meet the criteria of normal distribution. Since the purpose of this assessment is to be able to detect a statistical change in the percent Articles (EventReportValue) rolling averages that could indicate an increasing trend in conflict events within a given country, a non-parametric test, like Kruskai-Wallis, should replace the proposed parametric standard deviation, which is a form of descriptive statistics that is reliant on normal distribution.
 # MAGIC - [Medium: Skewed Data](https://towardsdatascience.com/skewed-data-a-problem-to-your-statistical-model-9a6b5bb74e37)
 # MAGIC - [Non-Parametric Statistics](http://erecursos.uacj.mx/bitstream/handle/20.500.11961/2064/Gibbons%2C%202003.pdf?sequence=14&isAllowed=y)
+# MAGIC 
+# MAGIC 
+# MAGIC As mentioned above, the Kruskal-Wallis H-test is the non-parametric version of ANOVA tests, which the null hypothesis that the population median of all of the groups are equal. The test works on 2 or more independent samples, which may have different sizes, and makes the assumption that H has a chi square distribution. Since the rejection the null hypothesis does not indicate which of the groups differs, a post hoc comparisons between the groups is required to determine which groups are different. [source](https://docs.scipy.org/doc/scipy/reference/generated/scipy.stats.kruskal.html)
+
+# COMMAND ----------
+
+# ERV
+stats.kruskal(erv_conflict, erv_nonconflict)
+
+# COMMAND ----------
+
+# ERA_3d
+stats.kruskal(weightedERA_3d_conflict, weightedERA_3d_nonconflict)
+
+# COMMAND ----------
+
+# ERA_60d
+stats.kruskal(weightedERA_60d_conflict, weightedERA_60d_nonconflict)
+
+# COMMAND ----------
+
