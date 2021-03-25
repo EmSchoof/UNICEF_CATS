@@ -121,7 +121,7 @@ gdeltTargetOutput.limit(2).toPandas()
 
 # DBTITLE 1,Calculate Event Report Value (ERV)
 # create a Window, country by date
-countriesDaily_window = Window.partitionBy('ActionGeo_FullName', 'EventTimeDate').orderBy('EventTimeDate')
+countriesDaily_window = Window.partitionBy('EventTimeDate', 'ActionGeo_FullName').orderBy('EventTimeDate')
 
 # get daily percent of articles for each Event Code string within Window
 gdeltTargetOutputPartitioned = gdeltTargetOutput.withColumn('EventReportValue', F.col('nArticles')/F.sum('nArticles').over(countriesDaily_window))
@@ -215,8 +215,9 @@ weightedRollingAvgs.limit(10).toPandas()
 
 # DBTITLE 1,Select Output Data
 targetValueOutput = weightedRollingAvgs.select('ActionGeo_FullName','EventTimeDate','EventRootCodeString','nArticles','avgConfidence',
-                                          'GoldsteinReportValue','ToneReportValue','EventReportValue','weightedERA_3d','weightedERA_60d',
-                                          'weightedGRA_3d','weightedGRA_60d','weightedTRA_3d','weightedTRA_60d')
+                                          'GoldsteinReportValue','GRA_3d','GRA_60d','weightedGRA_3d','weightedGRA_60d',
+                                          'ToneReportValue','TRA_3d','TRA_60d','weightedTRA_3d','weightedTRA_60d',
+                                          'EventReportValue','ERA_3d','ERA_60d','weightedERA_3d','weightedERA_60d')
 
 print((targetValueOutput.count(), len(targetValueOutput.columns)))
 targetValueOutput.limit(2).toPandas()
