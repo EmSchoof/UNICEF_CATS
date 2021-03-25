@@ -23,12 +23,6 @@
 
 # COMMAND ----------
 
-# MAGIC %md
-# MAGIC 
-# MAGIC For the sake of data storage, the *Weighted Average* of the Target Variables will be assessed, since the average numerical value per global event id per country per date was created in the previous preprocessing process.
-
-# COMMAND ----------
-
 # DBTITLE 1,Import Modules
 from functools import reduce
 from itertools import chain
@@ -61,12 +55,20 @@ preprocessedGDELT.limit(10).toPandas()
 
 # COMMAND ----------
 
+
+
+# COMMAND ----------
+
 # DBTITLE 1,Select Events Data
 eventsData = preprocessedGDELT.select('ActionGeo_FullName','EventTimeDate','EventRootCodeString','nArticles','avgConfidence',
-                                          'EventReportValue','weightedERA_3d','weightedERA_60d')
+                                          'EventReportValue','ERA_3d','ERA_60d','weightedERA_3d','weightedERA_60d')
 
 print((eventsData.count(), len(eventsData.columns)))
 eventsData.limit(2).toPandas()
+
+# COMMAND ----------
+
+display(eventsData)
 
 # COMMAND ----------
 
@@ -74,6 +76,10 @@ eventsData.limit(2).toPandas()
 # create conflict column
 conflict_events = ['DEMAND','DISAPPROVE','PROTEST','REJECT','THREATEN','ASSAULT','COERCE','ENGAGE IN UNCONVENTIONAL MASS VIOLENCE','EXHIBIT MILITARY POSTURE','FIGHT','REDUCE RELATIONS']
 eventsData = eventsData.withColumn('if_conflict', F.when(F.col('EventRootCodeString').isin(conflict_events), True).otherwise(False))
+
+# COMMAND ----------
+
+display(eventsData)
 
 # COMMAND ----------
 
@@ -173,18 +179,18 @@ def plot_dist(df, col):
 
 # COMMAND ----------
 
-def conflict_eda_funcs(col): 
+def eda_funcs(col, df): 
   
   # get lists
-  list_conflict = eventsData.select(col).rdd.flatMap(lambda x: x).collect()
+  list_conflict = df.select(col).rdd.flatMap(lambda x: x).collect()
   
   # get quantiles
   print('Get Conflict Quantiles for ' + col)
-  get_quantiles(eventsDataConflict, col)
+  get_quantiles(df, col)
   plot_boxplot(list_conflict, col)
   
   # plot dist
-  plot_dist(eventsDataConflict, col)
+  plot_dist(df, col)
   
   # plot ecdf
   plot_ecdf(list_conflict, 'CONFLICT ' + col)
@@ -193,23 +199,22 @@ def conflict_eda_funcs(col):
 
 # COMMAND ----------
 
-def nonconflict_eda_funcs(col): 
-  
-  # get lists
-  list_not = eventsDataNonConflict.select(col).rdd.flatMap(lambda x: x).collect()
-  
-  # get quantiles
-  print('Get Non-Conflict Quantiles for ' + col)
-  get_quantiles(eventsDataNonConflict, col)
-  plot_boxplot(list_not, col)
-  
-  # plot dist
-  plot_dist(eventsDataNonConflict, col)
- 
-  # plot ecdf
-  plot_ecdf(list_not, 'NON-CONFLICT ' + col)
-  
-  return list_not
+# MAGIC %md 
+# MAGIC ### Calculate Weighted 3-Day Avg over last 60 Days
+# MAGIC ### Calculate Weighted 60-Day Avg over last 60 Days
+
+# COMMAND ----------
+
+last20d = eventsDataNonConflict.filter(F.col('EventTimeDate') >= '2021-03-02').select('ActionGeo_FullName','EventTimeDate','weightedERA_3d').toPandas()
+last20d.head()
+
+# COMMAND ----------
+
+display(last20d)
+
+# COMMAND ----------
+
+
 
 # COMMAND ----------
 
@@ -218,11 +223,37 @@ def nonconflict_eda_funcs(col):
 
 # COMMAND ----------
 
-erv_conflict = conflict_eda_funcs('EventReportValue')
+erv_conflict = eda_funcs('EventReportValue', eventsDataConflict)
 
 # COMMAND ----------
 
-erv_nonconflict = nonconflict_eda_funcs('EventReportValue')
+erv_nonconflict = eda_funcs('EventReportValue', eventsDataNonConflict)
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC ### ERA 3D
+
+# COMMAND ----------
+
+ERA_3d_conflict = eda_funcs('ERA_3d', eventsDataConflict)
+
+# COMMAND ----------
+
+ ERA_3d_nonconflict = eda_funcs('ERA_3d', eventsDataNonConflict)
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC ### ERA 60D
+
+# COMMAND ----------
+
+ERA_60d_conflict = eda_funcs('ERA_60d', eventsDataConflict)
+
+# COMMAND ----------
+
+ERA_60d_nonconflict = eda_funcs('ERA_60d', eventsDataNonConflict)
 
 # COMMAND ----------
 
@@ -231,11 +262,11 @@ erv_nonconflict = nonconflict_eda_funcs('EventReportValue')
 
 # COMMAND ----------
 
-weightedERA_3d_conflict = conflict_eda_funcs('weightedERA_3d')
+weightedERA_3d_conflict = eda_funcs('weightedERA_3d', eventsDataConflict)
 
 # COMMAND ----------
 
- weightedERA_3d_nonconflict = nonconflict_eda_funcs('weightedERA_3d')
+ weightedERA_3d_nonconflict = eda_funcs('weightedERA_3d', eventsDataNonConflict)
 
 # COMMAND ----------
 
@@ -244,11 +275,11 @@ weightedERA_3d_conflict = conflict_eda_funcs('weightedERA_3d')
 
 # COMMAND ----------
 
-weightedERA_60d_conflict = conflict_eda_funcs('weightedERA_60d')
+weightedERA_60d_conflict = eda_funcs('weightedERA_60d', eventsDataConflict)
 
 # COMMAND ----------
 
-weightedERA_60d_nonconflict = nonconflict_eda_funcs('weightedERA_60d')
+weightedERA_60d_nonconflict = eda_funcs('weightedERA_60d', eventsDataNonConflict)
 
 # COMMAND ----------
 
@@ -260,7 +291,9 @@ weightedERA_60d_nonconflict = nonconflict_eda_funcs('weightedERA_60d')
 # MAGIC - [Non-Parametric Statistics](http://erecursos.uacj.mx/bitstream/handle/20.500.11961/2064/Gibbons%2C%202003.pdf?sequence=14&isAllowed=y)
 # MAGIC 
 # MAGIC 
-# MAGIC As mentioned above, the Kruskal-Wallis H-test is the non-parametric version of ANOVA tests, which the null hypothesis that the population median of all of the groups are equal. The test works on 2 or more independent samples, which may have different sizes, and makes the assumption that H has a chi square distribution. Since the rejection the null hypothesis does not indicate which of the groups differs, a post hoc comparisons between the groups is required to determine which groups are different. [source](https://docs.scipy.org/doc/scipy/reference/generated/scipy.stats.kruskal.html)
+# MAGIC 
+# MAGIC 
+# MAGIC (A) As mentioned above, the Kruskal-Wallis H-test is the non-parametric version of ANOVA tests, which the null hypothesis that the population median of all of the groups are equal. The test works on 2 or more independent samples, which may have different sizes, and makes the assumption that H has a chi square distribution. Since the rejection the null hypothesis does not indicate which of the groups differs, a post hoc comparisons between the groups is required to determine which groups are different. [source](https://docs.scipy.org/doc/scipy/reference/generated/scipy.stats.kruskal.html)
 # MAGIC 
 # MAGIC 
 # MAGIC #### Assumptions for Kruskal-Wallis H-test:
@@ -268,12 +301,23 @@ weightedERA_60d_nonconflict = nonconflict_eda_funcs('weightedERA_60d')
 # MAGIC   - EventReportValue et.al is a percentage, which is a type of continuous variable measured between 0 and 1
 # MAGIC - *Assumption #2*: The independent variable should consist of 2 or more categorical, independent groups.
 # MAGIC   - When grouping at the country level, there are 4 categorical groups for QuadClass, which can be subdivided in to 20 independent categories of EventRootCodes. 
-# MAGIC   - For the initial iteration of this analysis, QuadClass will be grouped into 2 categorical, independent groups: Conflict vs Non-Conflict.
+# MAGIC   - However, for the initial iteration of this analysis, all data will be grouped into 2 categorical, independent groups: Conflict vs Non-Conflict.
 # MAGIC - *Assumption #3*: There is independence of observations, which means that there is no relationship between the observations in each group or between the groups themselves.
 # MAGIC   - When grouping at the country level, each global event and respective calculated EventReportValue is entirely independents of other entries.
 # MAGIC - *Assumption #4*: The distribution of each dependent variable categorical group has been explored; if the distributions are similar the median will be assessed, else the mean.
+# MAGIC   - As discussed, above, all versions of the EventReportValue (Daily and Rolling Averages) in both Conflict and Non-Conflict events have a skewed-right distribution.
 # MAGIC 
 # MAGIC [source](https://statistics.laerd.com/spss-tutorials/kruskal-wallis-h-test-using-spss-statistics.php)
+# MAGIC 
+# MAGIC 
+# MAGIC 
+# MAGIC (B) Another option is to transform the data in order create a normally-distributed variable. Since this variable is a percentage, one post suggested transforming the data via the arcsine method [source](https://www.researchgate.net/post/Should_I_do_log_transform_percentage_data_of_cell_subsets_measured_with_FACS/54b682a5d2fd645a788b4686/citation/download). Arcsine, or angular, transformation is the preferred variable transformation for multivariant problems where both 0% and 100% are viable options. [source](http://strata.uga.edu/8370/rtips/proportions.html#:~:text=The%20arcsine%20transformation%20(also%20called,square%20root%20of%20the%20proportion.&text=Multiplying%20by%20two%20makes%20the,scale%20stop%20at%20pi%2F2.)
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC 
+# MAGIC #### Option A - Apply Kruskal-Wallis H-test
 
 # COMMAND ----------
 
@@ -292,3 +336,56 @@ stats.kruskal(weightedERA_60d_conflict, weightedERA_60d_nonconflict)
 
 # COMMAND ----------
 
+# ERA_60d
+stats.kruskal(weightedERA_3d_conflict, weightedERA_3d_nonconflict, weightedERA_60d_conflict, weightedERA_60d_nonconflict)
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC 
+# MAGIC **Preliminary Conclusion**: While this isn't the final output comparrison, this method does not appear to be incredibly informative. 
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC 
+# MAGIC #### Option B - Transform Data with Arcsine
+
+# COMMAND ----------
+
+arcsine = F.udf(lambda x: float(np.arcsin(x)), FloatType())
+spark.udf.register("arcsine", arcsine)
+
+eventsDataNonConflict.createOrReplaceTempView('test')
+test_list = spark.sql("select arcsine(weightedERA_3d) from test")#.select('arcsine(weightedERA_3d)').rdd.map(lambda x: x[0])
+# = eventsDataNonConflict.withColumn('arcsine_weightedERA_3d', test_list)
+
+test = eventsDataNonConflict.join(test_list)
+test_list = eda_funcs('arcsine(weightedERA_3d)', test)
+
+# COMMAND ----------
+
+test.limit(10).toPandas()
+
+# COMMAND ----------
+
+eventsDataConflict // eventsDataNonConflict
+
+# COMMAND ----------
+
+test_list = eda_funcs('arcsine(weightedERA_3d)', test)
+
+# COMMAND ----------
+
+arcsine = F.udf(lambda x: float(np.arcsin(x)), FloatType())
+spark.udf.register("arcsine", arcsine)
+eventsDataNonConflict.createOrReplaceTempView('test')
+
+# COMMAND ----------
+
+test_list = spark.sql("select arcsine(EventReportValue) from test")
+test_list.limit(10).toPandas()
+
+# COMMAND ----------
+
+test_list2 = eda_funcs('arcsine(EventReportValue)', test_list)
