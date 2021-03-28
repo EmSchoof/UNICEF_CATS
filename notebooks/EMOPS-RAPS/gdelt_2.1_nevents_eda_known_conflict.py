@@ -87,11 +87,30 @@ GIN = eventsData.filter((F.col('ActionGeo_FullName') == 'Guinea'))
 
 # COMMAND ----------
 
-display(AFG)
+#AFG = AFG.toPandas()
+
+plt.subplots(figsize=(16,8))
+plt.plot(AFG['EventReportValue'], label='Daily Return')
+plt.plot(AFG['ERA_3d'], label='Rolling 3d Mean')
+plt.plot(AFG['weightedERA_3d'], label = 'Rolling Weighted 3d Mean')
+plt.xlabel('Day')
+plt.ylabel('Return')
+plt.legend()
+plt.show()
 
 # COMMAND ----------
 
-display(AFG)
+AFG['EventReportValueExpanding'] = AFG['EventReportValue'].expanding().mean()
+AFG['EventReportValueRolling3d'] = AFG['EventReportValue'].rolling(3).mean()
+
+plt.subplots(figsize=(16,8))
+plt.plot(AFG['EventReportValue'], label='Daily Return')
+plt.plot(AFG['EventReportValueExpanding'], label='Expanding')
+plt.plot(AFG['EventReportValueRolling3d'], label = 'Rolling 3d Mean')
+plt.xlabel('Day')
+plt.ylabel('Return')
+plt.legend()
+plt.show()
 
 # COMMAND ----------
 
@@ -100,7 +119,29 @@ display(AFG)
 
 # COMMAND ----------
 
-display(MMR)
+MMR = MMR.toPandas()
+plt.subplots(figsize=(16,8))
+plt.plot(MMR['EventReportValue'], label='Daily Return')
+plt.plot(MMR['ERA_3d'], label='Rolling 3d Mean')
+plt.plot(MMR['weightedERA_3d'], label = 'Rolling Weighted 3d Mean')
+plt.xlabel('Day')
+plt.ylabel('Return')
+plt.legend()
+plt.show()
+
+# COMMAND ----------
+
+MMR['EventReportValueExpanding'] = MMR['EventReportValue'].expanding().mean()
+MMR['EventReportValueRolling3d'] = MMR['EventReportValue'].rolling(3).mean()
+
+plt.subplots(figsize=(16,8))
+plt.plot(MMR['EventReportValue'], label='Daily Return')
+plt.plot(MMR['EventReportValueExpanding'], label='Expanding')
+plt.plot(MMR['EventReportValueRolling3d'], label = 'Rolling 3d Mean')
+plt.xlabel('Day')
+plt.ylabel('Return')
+plt.legend()
+plt.show()
 
 # COMMAND ----------
 
@@ -109,7 +150,29 @@ display(MMR)
 
 # COMMAND ----------
 
-display(SOM)
+SOM = SOM.toPandas()
+plt.subplots(figsize=(16,8))
+plt.plot(SOM['EventReportValue'], label='Daily Return')
+plt.plot(SOM['ERA_3d'], label='Rolling 3d Mean')
+plt.plot(SOM['weightedERA_3d'], label = 'Rolling Weighted 3d Mean')
+plt.xlabel('Day')
+plt.ylabel('Return')
+plt.legend()
+plt.show()
+
+# COMMAND ----------
+
+SOM['EventReportValueExpanding'] = SOM['EventReportValue'].expanding().mean()
+SOM['EventReportValueRolling3d'] = SOM['EventReportValue'].rolling(3).mean()
+
+plt.subplots(figsize=(16,8))
+plt.plot(SOM['EventReportValue'], label='Daily Return')
+plt.plot(SOM['EventReportValueExpanding'], label='Expanding')
+plt.plot(SOM['EventReportValueRolling3d'], label = 'Rolling 3d Mean')
+plt.xlabel('Day')
+plt.ylabel('Return')
+plt.legend()
+plt.show()
 
 # COMMAND ----------
 
@@ -218,18 +281,19 @@ def eda_funcs(col, df):
 
 # COMMAND ----------
 
-# MAGIC %md 
-# MAGIC ### Calculate Weighted 3-Day Avg over last 60 Days
-# MAGIC ### Calculate Weighted 60-Day Avg over last 60 Days
-
-# COMMAND ----------
-
 last20d = eventsDataNonConflict.filter(F.col('EventTimeDate') >= '2021-03-02').select('ActionGeo_FullName','EventTimeDate','weightedERA_3d').toPandas()
 last20d.head()
 
 # COMMAND ----------
 
-display(last20d)
+plt.subplots(figsize=(8,6))
+plt.plot(stock_df['daily_return'], label='Daily Return')
+plt.plot(stock_df['expand_mean'], label='Expanding Mean')
+plt.plot(stock_df['roll_mean_3'], label = 'Rolling Mean')
+plt.xlabel('Day')
+plt.ylabel('Return')
+plt.legend()
+plt.show()
 
 # COMMAND ----------
 
