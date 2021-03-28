@@ -50,12 +50,11 @@ preprocessedGDELT = spark.read.format("csv") \
   .option("header", first_row_is_header) \
   .option("sep", delimiter) \
   .load("/Filestore/tables/tmp/gdelt/targetvalues.csv")
-print((preprocessedGDELT.count(), len(preprocessedGDELT.columns)))
-preprocessedGDELT.limit(10).toPandas()
 
-# COMMAND ----------
-
-
+# filter on flagged countries from Horizan Scan
+conflictEventsHorizonCountries = preprocessedGDELT.filter(F.col('ActionGeo_FullName').isin('Afghanistan','Guinea','Myanmar','Somalia'))
+print((conflictEventsHorizonCountries.count(), len(conflictEventsHorizonCountries.columns)))
+conflictEventsHorizonCountries.limit(10).toPandas()
 
 # COMMAND ----------
 
@@ -68,10 +67,6 @@ eventsData.limit(2).toPandas()
 
 # COMMAND ----------
 
-display(eventsData)
-
-# COMMAND ----------
-
 # DBTITLE 1,Explore Values in Conflict vs Not Situations
 # create conflict column
 conflict_events = ['DEMAND','DISAPPROVE','PROTEST','REJECT','THREATEN','ASSAULT','COERCE','ENGAGE IN UNCONVENTIONAL MASS VIOLENCE','EXHIBIT MILITARY POSTURE','FIGHT','REDUCE RELATIONS']
@@ -79,18 +74,105 @@ eventsData = eventsData.withColumn('if_conflict', F.when(F.col('EventRootCodeStr
 
 # COMMAND ----------
 
-display(eventsData)
+# DBTITLE 1,Separate by Country
+AFG = eventsData.filter((F.col('ActionGeo_FullName') == 'Afghanistan'))
+MMR = eventsData.filter((F.col('ActionGeo_FullName') == 'Myanmar'))
+SOM = eventsData.filter((F.col('ActionGeo_FullName') == 'Somalia'))
+GIN = eventsData.filter((F.col('ActionGeo_FullName') == 'Guinea'))
 
 # COMMAND ----------
 
-# It's a best practice to sample data from your Spark df into pandas
-sub_eventsData = eventsData.sample(withReplacement=False, fraction=0.5, seed=42)
+# MAGIC %md
+# MAGIC ### AFG
 
-# separate into conflict vs not 
-eventsDataConflict = sub_eventsData.filter(F.col('if_conflict') == True)
-print((eventsDataConflict.count(), len(eventsDataConflict.columns)))
-eventsDataNonConflict = sub_eventsData.filter(F.col('if_conflict') != True)
-print((eventsDataNonConflict.count(), len(eventsDataNonConflict.columns)))
+# COMMAND ----------
+
+#AFG = AFG.toPandas()
+
+plt.subplots(figsize=(16,8))
+plt.plot(AFG['EventReportValue'], label='Daily Return')
+plt.plot(AFG['ERA_3d'], label='Rolling 3d Mean')
+plt.plot(AFG['weightedERA_3d'], label = 'Rolling Weighted 3d Mean')
+plt.xlabel('Day')
+plt.ylabel('Return')
+plt.legend()
+plt.show()
+
+# COMMAND ----------
+
+AFG['EventReportValueExpanding'] = AFG['EventReportValue'].expanding().mean()
+AFG['EventReportValueRolling3d'] = AFG['EventReportValue'].rolling(3).mean()
+
+plt.subplots(figsize=(16,8))
+plt.plot(AFG['EventReportValue'], label='Daily Return')
+plt.plot(AFG['EventReportValueExpanding'], label='Expanding')
+plt.plot(AFG['EventReportValueRolling3d'], label = 'Rolling 3d Mean')
+plt.xlabel('Day')
+plt.ylabel('Return')
+plt.legend()
+plt.show()
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC ### MMR
+
+# COMMAND ----------
+
+MMR = MMR.toPandas()
+plt.subplots(figsize=(16,8))
+plt.plot(MMR['EventReportValue'], label='Daily Return')
+plt.plot(MMR['ERA_3d'], label='Rolling 3d Mean')
+plt.plot(MMR['weightedERA_3d'], label = 'Rolling Weighted 3d Mean')
+plt.xlabel('Day')
+plt.ylabel('Return')
+plt.legend()
+plt.show()
+
+# COMMAND ----------
+
+MMR['EventReportValueExpanding'] = MMR['EventReportValue'].expanding().mean()
+MMR['EventReportValueRolling3d'] = MMR['EventReportValue'].rolling(3).mean()
+
+plt.subplots(figsize=(16,8))
+plt.plot(MMR['EventReportValue'], label='Daily Return')
+plt.plot(MMR['EventReportValueExpanding'], label='Expanding')
+plt.plot(MMR['EventReportValueRolling3d'], label = 'Rolling 3d Mean')
+plt.xlabel('Day')
+plt.ylabel('Return')
+plt.legend()
+plt.show()
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC ### SOM
+
+# COMMAND ----------
+
+SOM = SOM.toPandas()
+plt.subplots(figsize=(16,8))
+plt.plot(SOM['EventReportValue'], label='Daily Return')
+plt.plot(SOM['ERA_3d'], label='Rolling 3d Mean')
+plt.plot(SOM['weightedERA_3d'], label = 'Rolling Weighted 3d Mean')
+plt.xlabel('Day')
+plt.ylabel('Return')
+plt.legend()
+plt.show()
+
+# COMMAND ----------
+
+SOM['EventReportValueExpanding'] = SOM['EventReportValue'].expanding().mean()
+SOM['EventReportValueRolling3d'] = SOM['EventReportValue'].rolling(3).mean()
+
+plt.subplots(figsize=(16,8))
+plt.plot(SOM['EventReportValue'], label='Daily Return')
+plt.plot(SOM['EventReportValueExpanding'], label='Expanding')
+plt.plot(SOM['EventReportValueRolling3d'], label = 'Rolling 3d Mean')
+plt.xlabel('Day')
+plt.ylabel('Return')
+plt.legend()
+plt.show()
 
 # COMMAND ----------
 
@@ -199,22 +281,34 @@ def eda_funcs(col, df):
 
 # COMMAND ----------
 
-# MAGIC %md 
-# MAGIC ### Calculate Weighted 3-Day Avg over last 60 Days
-# MAGIC ### Calculate Weighted 60-Day Avg over last 60 Days
-
-# COMMAND ----------
-
 last20d = eventsDataNonConflict.filter(F.col('EventTimeDate') >= '2021-03-02').select('ActionGeo_FullName','EventTimeDate','weightedERA_3d').toPandas()
 last20d.head()
 
 # COMMAND ----------
 
-display(last20d)
+plt.subplots(figsize=(8,6))
+plt.plot(stock_df['daily_return'], label='Daily Return')
+plt.plot(stock_df['expand_mean'], label='Expanding Mean')
+plt.plot(stock_df['roll_mean_3'], label = 'Rolling Mean')
+plt.xlabel('Day')
+plt.ylabel('Return')
+plt.legend()
+plt.show()
 
 # COMMAND ----------
 
 
+
+# COMMAND ----------
+
+# It's a best practice to sample data from your Spark df into pandas
+sub_eventsData = eventsData.sample(withReplacement=False, fraction=0.5, seed=42)
+
+# separate into conflict vs not 
+eventsDataConflict = sub_eventsData.filter(F.col('if_conflict') == True)
+print((eventsDataConflict.count(), len(eventsDataConflict.columns)))
+eventsDataNonConflict = sub_eventsData.filter(F.col('if_conflict') != True)
+print((eventsDataNonConflict.count(), len(eventsDataNonConflict.columns)))
 
 # COMMAND ----------
 

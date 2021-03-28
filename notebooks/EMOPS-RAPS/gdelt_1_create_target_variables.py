@@ -39,9 +39,9 @@
 # MAGIC 
 # MAGIC - 	Tone point value (TPV): 
 # MAGIC Calculated as the average Mention Tone for all articles tagged as associated to the country
-# MAGIC -	Goldstein Running Average (TRA1):
+# MAGIC -	Tone Running Average (TRA1):
 # MAGIC Calculated as the rolling average of the TPV for PA1 over the previous 12 months
-# MAGIC -	Goldstein Running Average (TRA2):
+# MAGIC -	Tone Running Average (TRA2):
 # MAGIC Calculated as the rolling average of the TPV for PA2 over the previous 24 months
 # MAGIC -	Tone spike alert: 
 # MAGIC When the *Tone Point Value* for a given PA1 (*3 DAYS*) is one standard deviation above ERA1* 
@@ -121,7 +121,7 @@ gdeltTargetOutput.limit(2).toPandas()
 
 # DBTITLE 1,Calculate Event Report Value (ERV)
 # create a Window, country by date
-countriesDaily_window = Window.partitionBy('ActionGeo_FullName', 'EventTimeDate').orderBy('EventTimeDate')
+countriesDaily_window = Window.partitionBy('EventTimeDate', 'ActionGeo_FullName').orderBy('EventTimeDate')
 
 # get daily percent of articles for each Event Code string within Window
 gdeltTargetOutputPartitioned = gdeltTargetOutput.withColumn('EventReportValue', F.col('nArticles')/F.sum('nArticles').over(countriesDaily_window))
@@ -215,8 +215,9 @@ weightedRollingAvgs.limit(10).toPandas()
 
 # DBTITLE 1,Select Output Data
 targetValueOutput = weightedRollingAvgs.select('ActionGeo_FullName','EventTimeDate','EventRootCodeString','nArticles','avgConfidence',
-                                          'GoldsteinReportValue','ToneReportValue','EventReportValue','weightedERA_3d','weightedERA_60d',
-                                          'weightedGRA_3d','weightedGRA_60d','weightedTRA_3d','weightedTRA_60d')
+                                          'GoldsteinReportValue','GRA_3d','GRA_60d','weightedGRA_3d','weightedGRA_60d',
+                                          'ToneReportValue','TRA_3d','TRA_60d','weightedTRA_3d','weightedTRA_60d',
+                                          'EventReportValue','ERA_3d','ERA_60d','weightedERA_3d','weightedERA_60d')
 
 print((targetValueOutput.count(), len(targetValueOutput.columns)))
 targetValueOutput.limit(2).toPandas()
