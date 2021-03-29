@@ -64,10 +64,6 @@ eventsData.limit(2).toPandas()
 
 # COMMAND ----------
 
-display(eventsData)
-
-# COMMAND ----------
-
 # DBTITLE 1,Explore Values in Conflict vs Not Situations
 # create conflict column
 conflict_events = ['DEMAND','DISAPPROVE','PROTEST','REJECT','THREATEN','ASSAULT','COERCE','ENGAGE IN UNCONVENTIONAL MASS VIOLENCE','EXHIBIT MILITARY POSTURE','FIGHT','REDUCE RELATIONS']
@@ -163,10 +159,15 @@ def eda_funcs(country, col, conflict=True):
 
 # COMMAND ----------
 
-AFG = eventsData.filter((F.col('ActionGeo_FullName') == 'Afghanistan'))
-MMR = eventsData.filter((F.col('ActionGeo_FullName') == 'Myanmar'))
-SOM = eventsData.filter((F.col('ActionGeo_FullName') == 'Somalia'))
-GIN = eventsData.filter((F.col('ActionGeo_FullName') == 'Guinea'))
+# MAGIC %md
+# MAGIC ### Compare Raw, Average, and Weighted Average of EventReportValue
+
+# COMMAND ----------
+
+AFG_3d = eventsData.filter(F.col('ActionGeo_FullName') == 'Afghanistan').select('EventReportValue', 'ERA_3d', 'WeightedERA_3d').toPandas()
+sns.pairplot(AFG_3d)
+AFG_60d = eventsData.filter(F.col('ActionGeo_FullName') == 'Afghanistan').select('EventReportValue', 'ERA_3d','ERA_60d', 'WeightedERA_60d').toPandas()
+sns.pairplot(AFG_60d)
 
 # COMMAND ----------
 
@@ -214,11 +215,11 @@ afg_erv60d_nonconflict = eda_funcs(country='Afghanistan', col='ERA_60d', conflic
 
 # COMMAND ----------
 
-weightedERA_3d_conflict = eda_funcs('weightedERA_3d', eventsDataConflict)
+afg_erv3d_weighted_conflict = eda_funcs(country='Afghanistan', col='weightedERA_3d', conflict=True)
 
 # COMMAND ----------
 
- weightedERA_3d_nonconflict = eda_funcs('weightedERA_3d', eventsDataNonConflict)
+afg_erv3d_weighted_nonconflict = eda_funcs(country='Afghanistan', col='weightedERA_3d', conflict=False)
 
 # COMMAND ----------
 
@@ -227,11 +228,11 @@ weightedERA_3d_conflict = eda_funcs('weightedERA_3d', eventsDataConflict)
 
 # COMMAND ----------
 
-weightedERA_60d_conflict = eda_funcs('weightedERA_60d', eventsDataConflict)
+afg_erv60d_weighted_conflict = eda_funcs(country='Afghanistan', col='weightedERA_60d', conflict=True)
 
 # COMMAND ----------
 
-weightedERA_60d_nonconflict = eda_funcs('weightedERA_60d', eventsDataNonConflict)
+afg_erv60d_weighted_nonconflict = eda_funcs(country='Afghanistan', col='weightedERA_60d', conflict=False)
 
 # COMMAND ----------
 
@@ -273,59 +274,28 @@ weightedERA_60d_nonconflict = eda_funcs('weightedERA_60d', eventsDataNonConflict
 
 # COMMAND ----------
 
-# ERV
-stats.kruskal(erv_conflict, erv_nonconflict)
+# ERV_3d
+stats.kruskal(afg_erv3d_conflict, afg_erv3d_nonconflict)
 
 # COMMAND ----------
 
-# ERA_3d
-stats.kruskal(weightedERA_3d_conflict, weightedERA_3d_nonconflict)
-
-# COMMAND ----------
-
-# ERA_60d
-stats.kruskal(weightedERA_60d_conflict, weightedERA_60d_nonconflict)
+# ERA_3d Weighted
+stats.kruskal(afg_erv3d_weighted_conflict, afg_erv3d_weighted_nonconflict)
 
 # COMMAND ----------
 
 # ERA_60d
-stats.kruskal(weightedERA_3d_conflict, weightedERA_3d_nonconflict, weightedERA_60d_conflict, weightedERA_60d_nonconflict)
+stats.kruskal(afg_erv60d_conflict, afg_erv60d_nonconflict)
 
 # COMMAND ----------
 
-# MAGIC %md
-# MAGIC 
-# MAGIC **Preliminary Conclusion**: While this isn't the final output comparrison, this method does not appear to be incredibly informative. 
+# Weighted ERA_60d
+stats.kruskal(afg_erv60d_weighted_conflict, afg_erv60d_weighted_nonconflict)
 
 # COMMAND ----------
 
-# MAGIC %md
-# MAGIC 
-# MAGIC #### Option B - Transform Data with Arcsine
-
-# COMMAND ----------
-
-arcsine = F.udf(lambda x: float(np.arcsin(x)), FloatType())
-spark.udf.register("arcsine", arcsine)
-
-eventsDataNonConflict.createOrReplaceTempView('test')
-test_list = spark.sql("select arcsine(weightedERA_3d) from test")#.select('arcsine(weightedERA_3d)').rdd.map(lambda x: x[0])
-# = eventsDataNonConflict.withColumn('arcsine_weightedERA_3d', test_list)
-
-test = eventsDataNonConflict.join(test_list)
-test_list = eda_funcs('arcsine(weightedERA_3d)', test)
-
-# COMMAND ----------
-
-test.limit(10).toPandas()
-
-# COMMAND ----------
-
-eventsDataConflict // eventsDataNonConflict
-
-# COMMAND ----------
-
-test_list = eda_funcs('arcsine(weightedERA_3d)', test)
+# MAGIC %md 
+# MAGIC ### ARC SINE
 
 # COMMAND ----------
 
