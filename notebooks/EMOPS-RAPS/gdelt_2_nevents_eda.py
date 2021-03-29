@@ -55,10 +55,6 @@ preprocessedGDELT.limit(10).toPandas()
 
 # COMMAND ----------
 
-
-
-# COMMAND ----------
-
 # DBTITLE 1,Select Events Data
 eventsData = preprocessedGDELT.select('ActionGeo_FullName','EventTimeDate','EventRootCodeString','nArticles','avgConfidence',
                                           'EventReportValue','ERA_3d','ERA_60d','weightedERA_3d','weightedERA_60d')
@@ -83,8 +79,9 @@ display(eventsData)
 
 # COMMAND ----------
 
-# It's a best practice to sample data from your Spark df into pandas
-sub_eventsData = eventsData#.sample(withReplacement=False, fraction=0.5, seed=42)
+# It's a best practice to sample data from your Spark df into pandas #.sample(withReplacement=False, fraction=0.5, seed=42)
+explore_countries = ['Afghanistan','Myanmar','Somalia','Guinea']
+sub_eventsData = eventsData.filter(F.col('ActionGeo_FullName').isin(explore_countries))
 
 # separate into conflict vs not 
 eventsDataConflict = sub_eventsData.filter(F.col('if_conflict') == True)
@@ -146,14 +143,30 @@ def plot_ecdf(vals_list, title):
 
 # COMMAND ----------
 
-def eda_funcs(col, df): 
-  list_conflict = df.select(col).rdd.flatMap(lambda x: x).collect()
-  print('Get Conflict Quantiles for ' + col)
+def eda_funcs(country, col, conflict=True): 
+  
+  if conflict == True:
+      name = 'Conflict'
+      df = eventsData.filter((F.col('ActionGeo_FullName') == country) & (F.col('if_conflict') == True))
+      list_vals = df.select(col).rdd.flatMap(lambda x: x).collect()
+  else:
+      name = 'NonConflict'  
+      df = eventsData.filter((F.col('ActionGeo_FullName') == country) & (F.col('if_conflict') != True))
+      list_vals = df.select(col).rdd.flatMap(lambda x: x).collect()
+  
+  print('Get ' + name + ' Quantiles for ' + col)
   get_quantiles(df, col)
-  plot_boxplot(list_conflict, col)
+  plot_boxplot(list_vals, col)
   plot_dist(df, col)
-  plot_ecdf(list_conflict, 'CONFLICT ' + col)
-  return list_conflict
+  plot_ecdf(list_vals,  name + ' ' +  col)
+  return list_vals
+
+# COMMAND ----------
+
+AFG = eventsData.filter((F.col('ActionGeo_FullName') == 'Afghanistan'))
+MMR = eventsData.filter((F.col('ActionGeo_FullName') == 'Myanmar'))
+SOM = eventsData.filter((F.col('ActionGeo_FullName') == 'Somalia'))
+GIN = eventsData.filter((F.col('ActionGeo_FullName') == 'Guinea'))
 
 # COMMAND ----------
 
@@ -162,11 +175,11 @@ def eda_funcs(col, df):
 
 # COMMAND ----------
 
-erv_conflict = eda_funcs('EventReportValue', eventsDataConflict)
+afg_erv_conflict = eda_funcs(country='Afghanistan', col='EventReportValue', conflict=True)
 
 # COMMAND ----------
 
-erv_nonconflict = eda_funcs('EventReportValue', eventsDataNonConflict)
+afg_erv_nonconflict = eda_funcs(country='Afghanistan', col='EventReportValue', conflict=False)
 
 # COMMAND ----------
 
@@ -175,11 +188,11 @@ erv_nonconflict = eda_funcs('EventReportValue', eventsDataNonConflict)
 
 # COMMAND ----------
 
-ERA_3d_conflict = eda_funcs('ERA_3d', eventsDataConflict)
+afg_erv3d_conflict = eda_funcs(country='Afghanistan', col='ERA_3d', conflict=True)
 
 # COMMAND ----------
 
- ERA_3d_nonconflict = eda_funcs('ERA_3d', eventsDataNonConflict)
+afg_erv3d_nonconflict = eda_funcs(country='Afghanistan', col='ERA_3d', conflict=False)
 
 # COMMAND ----------
 
@@ -188,11 +201,11 @@ ERA_3d_conflict = eda_funcs('ERA_3d', eventsDataConflict)
 
 # COMMAND ----------
 
-ERA_60d_conflict = eda_funcs('ERA_60d', eventsDataConflict)
+afg_erv60d_conflict = eda_funcs(country='Afghanistan', col='ERA_60d', conflict=True)
 
 # COMMAND ----------
 
-ERA_60d_nonconflict = eda_funcs('ERA_60d', eventsDataNonConflict)
+afg_erv60d_nonconflict = eda_funcs(country='Afghanistan', col='ERA_60d', conflict=False)
 
 # COMMAND ----------
 
