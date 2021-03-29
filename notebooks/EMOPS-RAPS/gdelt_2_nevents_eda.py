@@ -84,7 +84,7 @@ display(eventsData)
 # COMMAND ----------
 
 # It's a best practice to sample data from your Spark df into pandas
-sub_eventsData = eventsData.sample(withReplacement=False, fraction=0.5, seed=42)
+sub_eventsData = eventsData#.sample(withReplacement=False, fraction=0.5, seed=42)
 
 # separate into conflict vs not 
 eventsDataConflict = sub_eventsData.filter(F.col('if_conflict') == True)
@@ -99,22 +99,7 @@ print((eventsDataNonConflict.count(), len(eventsDataNonConflict.columns)))
 
 # COMMAND ----------
 
-def plot_boxplot(var_list, title):
-  
-  # Add boxplot for var
-  sns.boxplot(var_list)
-
-  # Label axis 
-  plt.xlabel(title)
-  plt.ylabel('Probability Density Function')
-  plt.title('Distribution of ' + title)
-
-  # Show plot and add print mean and std sample information
-  plt.show()
-  'The sample(n=' + str(len(var_list)) + ') population mean is ' + str(round(np.mean(var_list), 2)) + ' with a standard deviation of ' + str(round(np.std(var_list), 2)) + '.'
-
-# COMMAND ----------
-
+# DBTITLE 0,Calculate Empirical Cumulative Distribution Function (ECDF)
 def get_quantiles(df, col):
     quantile = df.approxQuantile([col], [0.25, 0.5, 0.75], 0)
     quantile_25 = quantile[0][0]
@@ -124,97 +109,51 @@ def get_quantiles(df, col):
     print('quantile_50: '+str(quantile_50))
     print('quantile_75: '+str(quantile_75))
 
-# COMMAND ----------
+def plot_boxplot(var_list, title):
+  sns.boxplot(var_list)
+  plt.xlabel(title)
+  plt.ylabel('Probability Density Function')
+  plt.title('Distribution of ' + title)
+  plt.show()
+  'The sample(n=' + str(len(var_list)) + ') population mean is ' + str(round(np.mean(var_list), 2)) + ' with a standard deviation of ' + str(round(np.std(var_list), 2)) + '.'
+  
+def plot_dist(df, col):
+    sample_df = df.select(col).sample(False, 0.5, 42)
+    pandas_df = sample_df.toPandas()
+    sns.distplot(pandas_df)
+    plt.xlabel(col) 
+    plt.show()
 
-# DBTITLE 1,Calculate Empirical Cumulative Distribution Function (ECDF)
-# create edcf function
 def ecdf(data):
     """Compute ECDF for a one-dimensional array of measurements."""
     x = np.sort(data)
     y = np.arange(1, len(data)+1) / len(data)
     return x, y
 
-# COMMAND ----------
-
-# DBTITLE 1,Plot ECDF
-def plot_ecdf(vals_list, title):
-  
-      # create theoretical dataset with Normal Distribution 
+def plot_ecdf(vals_list, title): 
       cdf_mean = np.mean(vals_list)
       cdf_std = np.std(vals_list)
-
-      # Simulate a random sample with the same distribution and size of 1,000,000
       cdf_samples = np.random.normal(cdf_mean, cdf_std, size=1000000)
-
-      # Compute the CDFs
       x_sample, y_sample = ecdf(vals_list)
       x_norm, y_norm = ecdf(cdf_samples)
-
-      # Plot both ECDFs on same the same figure
       fig = plt.plot(x_sample, y_sample, marker='.', linestyle='none', alpha=0.5)
       fig = plt.plot(x_norm, y_norm, marker='.', linestyle='none', alpha=0.5)
-
-      # Label figure
       plt.xlabel(title)
       fig = plt.ylabel('CDF')
       fig = plt.legend(('Sample Population', 'Theoretical Norm'), loc='lower right')
       fig = plt.title('Variable ECDF Distribution Compared to Statistical Norm')
-
-      # Save plots
       plt.show()
 
 # COMMAND ----------
 
-def plot_dist(df, col):
-  
-    # Plot distribution of a features
-    # Select a single column and sample and convert to pandas
-    sample_df = df.select(col).sample(False, 0.5, 42)
-    pandas_df = sample_df.toPandas()
-
-    # Plot distribution of pandas_df and display plot
-    sns.distplot(pandas_df)
-    plt.xlabel(col) 
-    plt.show()
-
-# COMMAND ----------
-
 def eda_funcs(col, df): 
-  
-  # get lists
   list_conflict = df.select(col).rdd.flatMap(lambda x: x).collect()
-  
-  # get quantiles
   print('Get Conflict Quantiles for ' + col)
   get_quantiles(df, col)
   plot_boxplot(list_conflict, col)
-  
-  # plot dist
   plot_dist(df, col)
-  
-  # plot ecdf
   plot_ecdf(list_conflict, 'CONFLICT ' + col)
-  
   return list_conflict
-
-# COMMAND ----------
-
-# MAGIC %md 
-# MAGIC ### Calculate Weighted 3-Day Avg over last 60 Days
-# MAGIC ### Calculate Weighted 60-Day Avg over last 60 Days
-
-# COMMAND ----------
-
-last20d = eventsDataNonConflict.filter(F.col('EventTimeDate') >= '2021-03-02').select('ActionGeo_FullName','EventTimeDate','weightedERA_3d').toPandas()
-last20d.head()
-
-# COMMAND ----------
-
-display(last20d)
-
-# COMMAND ----------
-
-
 
 # COMMAND ----------
 
