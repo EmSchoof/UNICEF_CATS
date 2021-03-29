@@ -18,6 +18,17 @@
 # MAGIC when the *Event Report Value* for a given PA2 (*60 DAYS*) is <strike>one standard deviation</strike>  above ERA2*
 # MAGIC 
 # MAGIC 
+# MAGIC 
+# MAGIC Compute three day average for all the data values you have across all years. 
+# MAGIC Your result will be X = [x1, x2, x3, ... xn]
+# MAGIC Set a threshhold parameter z. // benchmark special parameter (needs to be established per country?) come up with a "Ground Truth" value
+# MAGIC For each value in X, compare with z 
+# MAGIC 
+# MAGIC 
+# MAGIC 1 - [create a list of 3 day moving averages from today - 365 days] // compare this list with defined 'z' anomalist behavior to the current 3 day average per EventRootCode
+# MAGIC 2 - [create a list of 60 day moving averages from today - 730 days] // compare this list with defined 'z' anomalist behavior to the current 60 day average per EventRootCode
+# MAGIC 
+# MAGIC 
 # MAGIC Sources:
 # MAGIC - (1) [Moving Averaging with Apache Spark](https://www.linkedin.com/pulse/time-series-moving-average-apache-pyspark-laurent-weichberger/)
 
@@ -307,11 +318,12 @@ AFG.createOrReplaceTempView('afg')
 
 # COMMAND ----------
 
-test_list = spark.sql("select arcsine('weightedERA_60d') from afg")
+test_list = spark.sql("select arcsine(weightedERA_3d) from afg")
 #AFG = AFG.toPandas()
+AFG = AFG.join(test_list)
 #AFG["arcsine(weightedERA_60d)"] = test_list
 #AFG.head(5)
-test_list.limit(10).toPandas()
+AFG.limit(10).toPandas()
 
 # COMMAND ----------
 
