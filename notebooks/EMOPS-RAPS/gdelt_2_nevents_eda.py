@@ -28,6 +28,7 @@ from functools import reduce
 from itertools import chain
 import numpy as np
 import matplotlib.pyplot as plt
+import pandas as pd
 from pyspark.mllib.stat import Statistics
 from pyspark.sql import DataFrame
 import pyspark.sql.functions as F
@@ -139,21 +140,21 @@ def plot_ecdf(vals_list, title):
 
 # COMMAND ----------
 
-def eda_funcs(country, col, conflict=True): 
+def eda_funcs(df, country, col, conflict=True): 
   
   if conflict == True:
       name = 'Conflict'
-      df = eventsData.filter((F.col('ActionGeo_FullName') == country) & (F.col('if_conflict') == True))
+      df1 = df.filter((F.col('ActionGeo_FullName') == country) & (F.col('if_conflict') == True))
       list_vals = df.select(col).rdd.flatMap(lambda x: x).collect()
   else:
       name = 'NonConflict'  
-      df = eventsData.filter((F.col('ActionGeo_FullName') == country) & (F.col('if_conflict') != True))
+      df1 = df.filter((F.col('ActionGeo_FullName') == country) & (F.col('if_conflict') != True))
       list_vals = df.select(col).rdd.flatMap(lambda x: x).collect()
   
   print('Get ' + name + ' Quantiles for ' + col)
-  get_quantiles(df, col)
+  get_quantiles(df1, col)
   plot_boxplot(list_vals, col)
-  plot_dist(df, col)
+  plot_dist(df1, col)
   plot_ecdf(list_vals,  name + ' ' +  col)
   return list_vals
 
@@ -176,11 +177,11 @@ sns.pairplot(AFG_60d)
 
 # COMMAND ----------
 
-afg_erv_conflict = eda_funcs(country='Afghanistan', col='EventReportValue', conflict=True)
+afg_erv_conflict = eda_funcs(df=eventsData, country='Afghanistan', col='EventReportValue', conflict=True)
 
 # COMMAND ----------
 
-afg_erv_nonconflict = eda_funcs(country='Afghanistan', col='EventReportValue', conflict=False)
+afg_erv_nonconflict = eda_funcs(df=eventsData, country='Afghanistan', col='EventReportValue', conflict=False)
 
 # COMMAND ----------
 
@@ -189,11 +190,11 @@ afg_erv_nonconflict = eda_funcs(country='Afghanistan', col='EventReportValue', c
 
 # COMMAND ----------
 
-afg_erv3d_conflict = eda_funcs(country='Afghanistan', col='ERA_3d', conflict=True)
+afg_erv3d_conflict = eda_funcs(df=eventsData, country='Afghanistan', col='ERA_3d', conflict=True)
 
 # COMMAND ----------
 
-afg_erv3d_nonconflict = eda_funcs(country='Afghanistan', col='ERA_3d', conflict=False)
+afg_erv3d_nonconflict = eda_funcs(df=eventsData, country='Afghanistan', col='ERA_3d', conflict=False)
 
 # COMMAND ----------
 
@@ -202,11 +203,11 @@ afg_erv3d_nonconflict = eda_funcs(country='Afghanistan', col='ERA_3d', conflict=
 
 # COMMAND ----------
 
-afg_erv60d_conflict = eda_funcs(country='Afghanistan', col='ERA_60d', conflict=True)
+afg_erv60d_conflict = eda_funcs(df=eventsData, country='Afghanistan', col='ERA_60d', conflict=True)
 
 # COMMAND ----------
 
-afg_erv60d_nonconflict = eda_funcs(country='Afghanistan', col='ERA_60d', conflict=False)
+afg_erv60d_nonconflict = eda_funcs(df=eventsData, country='Afghanistan', col='ERA_60d', conflict=False)
 
 # COMMAND ----------
 
@@ -215,11 +216,11 @@ afg_erv60d_nonconflict = eda_funcs(country='Afghanistan', col='ERA_60d', conflic
 
 # COMMAND ----------
 
-afg_erv3d_weighted_conflict = eda_funcs(country='Afghanistan', col='weightedERA_3d', conflict=True)
+afg_erv3d_weighted_conflict = eda_funcs(df=eventsData, country='Afghanistan', col='weightedERA_3d', conflict=True)
 
 # COMMAND ----------
 
-afg_erv3d_weighted_nonconflict = eda_funcs(country='Afghanistan', col='weightedERA_3d', conflict=False)
+afg_erv3d_weighted_nonconflict = eda_funcs(df=eventsData, country='Afghanistan', col='weightedERA_3d', conflict=False)
 
 # COMMAND ----------
 
@@ -228,11 +229,11 @@ afg_erv3d_weighted_nonconflict = eda_funcs(country='Afghanistan', col='weightedE
 
 # COMMAND ----------
 
-afg_erv60d_weighted_conflict = eda_funcs(country='Afghanistan', col='weightedERA_60d', conflict=True)
+afg_erv60d_weighted_conflict = eda_funcs(df=eventsData, country='Afghanistan', col='weightedERA_60d', conflict=True)
 
 # COMMAND ----------
 
-afg_erv60d_weighted_nonconflict = eda_funcs(country='Afghanistan', col='weightedERA_60d', conflict=False)
+afg_erv60d_weighted_nonconflict = eda_funcs(df=eventsData, country='Afghanistan', col='weightedERA_60d', conflict=False)
 
 # COMMAND ----------
 
@@ -301,13 +302,36 @@ stats.kruskal(afg_erv60d_weighted_conflict, afg_erv60d_weighted_nonconflict)
 
 arcsine = F.udf(lambda x: float(np.arcsin(x)), FloatType())
 spark.udf.register("arcsine", arcsine)
-eventsDataNonConflict.createOrReplaceTempView('test')
+AFG = eventsData.filter(F.col('ActionGeo_FullName') == 'Afghanistan')
+AFG.createOrReplaceTempView('afg')
 
 # COMMAND ----------
 
-test_list = spark.sql("select arcsine(EventReportValue) from test")
+test_list = spark.sql("select arcsine('weightedERA_60d') from afg")
+#AFG = AFG.toPandas()
+#AFG["arcsine(weightedERA_60d)"] = test_list
+#AFG.head(5)
 test_list.limit(10).toPandas()
 
 # COMMAND ----------
 
-test_list2 = eda_funcs('arcsine(EventReportValue)', test_list)
+def eda_funcs(df, country, col, conflict=True): 
+  
+  if conflict == True:
+      name = 'Conflict'
+      df1 = df.filter((F.col('ActionGeo_FullName') == country) & (F.col('if_conflict') == True))
+      list_vals = df.select(col).rdd.flatMap(lambda x: x).collect()
+  else:
+      name = 'NonConflict'  
+      df1 = df.filter((F.col('ActionGeo_FullName') == country) & (F.col('if_conflict') != True))
+      list_vals = df.select(col).rdd.flatMap(lambda x: x).collect()
+  
+  print('Get ' + name + ' Quantiles for ' + col)
+  get_quantiles(df1, col)
+  plot_boxplot(list_vals, col)
+  plot_dist(df1, col)
+  plot_ecdf(list_vals,  name + ' ' +  col)
+  return list_vals
+
+
+test_list2 = eda_funcs(df=eventsData, 'arcsine(EventReportValue)', test_list)
