@@ -5,10 +5,10 @@
 # MAGIC - Period of Analysis 1 (PA1): 3 days
 # MAGIC - Period of Analysis 2 (PA2): 60 days 
 # MAGIC 
-# MAGIC ### Calculations – Percentages of Articles by Country by Event Type
+# MAGIC ### Calculations – Distribution of Articles by Country by Event Type
 # MAGIC 
 # MAGIC - 	Event report value (ERV): 
-# MAGIC Calculated as the percentage of total articles categorized as belonging to a country that are categorized as matches for an event type
+# MAGIC Calculated as the distribution of articles with respect to an event type category per country per day
 # MAGIC -   Event report sum (ERS):
 # MAGIC <strike> Calculated as the number of articles categorized as belonging to a country that are categorized as matches for an event type </strike>
 # MAGIC -	Event Running Average 1 (ERA1):
@@ -21,7 +21,7 @@
 # MAGIC when the *Event Report Value* for a given PA2 (*60 DAYS*) is one standard deviation above ERA2*
 # MAGIC 
 # MAGIC 
-# MAGIC ### Calculations – Percentages of Goldstein Scores
+# MAGIC ### Calculations – Averages of Goldstein Scores
 # MAGIC 
 # MAGIC - 	Goldstein point value (GPV): 
 # MAGIC Calculated as the average Goldstein score for all articles tagged as associated to the country
@@ -35,7 +35,7 @@
 # MAGIC when the *Goldstein Point Value* for a given PA2 (*60 DAYS*) is one standard deviation above GRA2*
 # MAGIC 
 # MAGIC 
-# MAGIC ### Calculations – Percentages of Tone Scores
+# MAGIC ### Calculations – Averages of Tone Scores
 # MAGIC 
 # MAGIC - 	Tone point value (TPV): 
 # MAGIC Calculated as the average Mention Tone for all articles tagged as associated to the country
@@ -96,7 +96,7 @@ preprocessedGDELT = preprocessedGDELT.withColumn('EventTimeDate', F.col('EventTi
 
 # MAGIC %md
 # MAGIC #### (1) Event report value (ERV)
-# MAGIC Calculated as the percentage of total articles categorized as belonging to a country that are categorized as matches for an event type
+# MAGIC Calculated as the distribution of articles with respect to an event type category per country per day
 # MAGIC 
 # MAGIC #### (2) Goldstein report value (GRV)
 # MAGIC Calculated as the average Goldstein score for all articles tagged as associated to the country
@@ -119,11 +119,29 @@ gdeltTargetOutput.limit(2).toPandas()
 
 # COMMAND ----------
 
+# DBTITLE 1,Verify Event Code is Present per Day
+event_codes = ['MAKE PUBLIC STATEMENT', 'APPEAL', 'EXPRESS INTENT TO COOPERATE', 'CONSULT', 'ENGAGE IN DIPLOMATIC COOPERATION', 'ENGAGE IN MATERIAL COOPERATION', 'PROVIDE AID', 'YIELD', 'INVESTIGATE', 'DEMAND', 'DISAPPROVE', 'REJECT', 'THREATEN', 'PROTEST', 'EXHIBIT MILITARY POSTURE', 'REDUCE RELATIONS', 'COERCE', 'ASSAULT', 'FIGHT', 'ENGAGE IN UNCONVENTIONAL MASS VIOLENCE']
+
+for country in dataframe:
+  country_df = dataframe.loc[ col == country ]
+  
+  for date in country_df['date']:
+    date_df = country_df.loc[ df['date'] == date ]
+    
+    for event_code in event_codes:
+      
+      if date_df['event_code'].contains(event_code):
+        skip
+      else:
+        date_df.append({country: country, date: date, eventrootcode: event_code, avgconfidence: 0, golstein: o, tone: 0, nArticles: 0})
+
+# COMMAND ----------
+
 # DBTITLE 1,Calculate Event Report Value (ERV)
 # create a Window, country by date
 countriesDaily_window = Window.partitionBy('EventTimeDate', 'ActionGeo_FullName').orderBy('EventTimeDate')
 
-# get daily percent of articles for each Event Code string within Window
+# get daily distribution of articles for each Event Code string within Window
 gdeltTargetOutputPartitioned = gdeltTargetOutput.withColumn('EventReportValue', F.col('nArticles')/F.sum('nArticles').over(countriesDaily_window))
 gdeltTargetOutputPartitioned.limit(2).toPandas()
 
@@ -133,10 +151,18 @@ gdeltTargetOutputPartitioned.limit(2).toPandas()
 AFG_01feb2021 = gdeltTargetOutputPartitioned.filter((F.col('ActionGeo_FullName') == 'Afghanistan') & (F.col('EventTimeDate') == '2021-02-01'))
 AFG_02feb2021 = gdeltTargetOutputPartitioned.filter((F.col('ActionGeo_FullName') == 'Afghanistan') & (F.col('EventTimeDate') == '2021-02-02'))
 AFG_03feb2021 = gdeltTargetOutputPartitioned.filter((F.col('ActionGeo_FullName') == 'Afghanistan') & (F.col('EventTimeDate') == '2021-02-03'))
-print('Event Report Values for One Country Per Day Should Sum to 100% (or 1)')
-print(AFG_01feb2021.select(F.sum('EventReportValue')).collect()[0][0])
-print(AFG_02feb2021.select(F.sum('EventReportValue')).collect()[0][0])
-print(AFG_03feb2021.select(F.sum('EventReportValue')).collect()[0][0])
+#print('Event Report Values for One Country Per Day Should Sum to 100% (or 1)')
+#print(AFG_01feb2021.select(F.sum('EventReportValue')).collect()[0][0])
+#print(AFG_02feb2021.select(F.sum('EventReportValue')).collect()[0][0])
+#print(AFG_03feb2021.select(F.sum('EventReportValue')).collect()[0][0])
+AFG_01feb2021.toPandas()
+
+# do for one or two -> select different countries and different days
+
+# COMMAND ----------
+
+# verify output
+sumERV = gdeltTargetOutputPartitioned.withColumn('sumERV', F.sum('EventReportValue')).over(countriesDaily_window)
 
 # COMMAND ----------
 
@@ -158,19 +184,15 @@ rolling60d_window = Window.partitionBy('ActionGeo_FullName', 'EventRootCodeStrin
 
 # COMMAND ----------
 
-# DBTITLE 1,Calculate Rolling Average (RA1/RA2)
-# get 3d/60d average of the Event Report Value (ERV) within Window
-rollingERAs1 = gdeltTargetOutputPartitioned.withColumn('ERA_3d', F.avg('EventReportValue').over(rolling3d_window)) 
-rollingERAs = rollingERAs1.withColumn('ERA_60d', F.avg('EventReportValue').over(rolling60d_window))
+# get WEIGHTED average of the Event Report Value (ERV) within Country Window
 
-# get 3d/60d average of the Golstein Report Value (GRV) within Window
-rollingGRVs1 = rollingERAs.withColumn('GRA_3d', F.avg('GoldsteinReportValue').over(rolling3d_window)) 
-rollingGRVs = rollingGRVs1.withColumn('GRA_60d', F.avg('GoldsteinReportValue').over(rolling60d_window))
 
-# get 3d/60d average of the Tone Report Value (TRV) within Window
-rollingTRVs = rollingGRVs.withColumn('TRA_3d', F.avg('ToneReportValue').over(rolling3d_window)) 
-rollingAvgsAll = rollingTRVs.withColumn('TRA_60d', F.avg('ToneReportValue').over(rolling60d_window))
-rollingAvgsAll.limit(10).toPandas()
+
+weightedERA1 = gdeltTargetOutputPartitioned.withColumn('wERA_3d_num', F.sum(F.col('EventReportValue') * F.col('nArticles')).over(rolling3d_window))
+weightedERA1 = weightedERA1.withColumn('wERA_3d_dem', F.sum('nArticles').over(rolling3d_window))
+weightedERA1 = weightedERA1.withColumn('wERA_3d', F.col('wERA_3d_num')/F.col('wERA_3d_dem'))
+
+gdeltTargetOutputPartitioned = gdeltTargetOutputPartitioned.withColumn('wERA_3d', weightedERA1.select('weightedERA1'))
 
 # COMMAND ----------
 
@@ -183,41 +205,10 @@ weightedAvg = F.udf(lambda col: F.sum(F.col(col) * F.col('nArticles')) / F.sum('
 
 # COMMAND ----------
 
-# get 3d WEIGHTED average of the Event Report Value (ERV) within Country Window
-weightedERA1 = rollingAvgsAll.withColumn('weightedERA_3d_num', F.sum(F.col('ERA_3d') * F.col('nArticles')).over(rolling3d_window))
-weightedERA1 = weightedERA1.withColumn('weightedERA_3d_dem', F.sum('nArticles').over(rolling3d_window))
-weightedERA1 = weightedERA1.withColumn('weightedERA_3d', F.col('weightedERA_3d_num')/F.col('weightedERA_3d_dem'))
-# 60d
-weightedERA2 = weightedERA1.withColumn('weightedERA_60d_num', F.sum(F.col('ERA_60d') * F.col('nArticles')).over(rolling60d_window))
-weightedERA2 = weightedERA2.withColumn('weightedERA_60d_dem', F.sum('nArticles').over(rolling60d_window))
-weightedERA2 = weightedERA2.withColumn('weightedERA_60d', F.col('weightedERA_60d_num')/F.col('weightedERA_60d_dem'))
-
-# get 3d WEIGHTED average of the Goldstein Report Value (GRV) within Country Window
-weightedGRA1 = weightedERA2.withColumn('weightedGRA_3d_num', F.sum(F.col('GRA_3d') * F.col('nArticles')).over(rolling3d_window))
-weightedGRA1 = weightedGRA1.withColumn('weightedGRA_3d_dem', F.sum('nArticles').over(rolling3d_window))
-weightedGRA1 = weightedGRA1.withColumn('weightedGRA_3d', F.col('weightedGRA_3d_num')/F.col('weightedGRA_3d_dem'))
-# 60d
-weightedGRA2 = weightedGRA1.withColumn('weightedGRA_60d_num', F.sum(F.col('GRA_60d') * F.col('nArticles')).over(rolling60d_window))
-weightedGRA2 = weightedGRA2.withColumn('weightedGRA_60d_dem', F.sum('nArticles').over(rolling60d_window))
-weightedGRA2 = weightedGRA2.withColumn('weightedGRA_60d', F.col('weightedGRA_60d_num')/F.col('weightedGRA_60d_dem'))
-
-# get 3d/60d WEIGHTED average of the Tone Report Value (GRV) within Country Window
-weightedTRA1 = weightedGRA2.withColumn('weightedTRA_3d_num', F.sum(F.col('TRA_3d') * F.col('nArticles')).over(rolling3d_window))
-weightedTRA1 = weightedTRA1.withColumn('weightedTRA_3d_dem', F.sum('nArticles').over(rolling3d_window))
-weightedTRA1 = weightedTRA1.withColumn('weightedTRA_3d', F.col('weightedTRA_3d_num')/F.col('weightedTRA_3d_dem'))
-# 60d
-weightedTRA2 = weightedTRA1.withColumn('weightedTRA_60d_num', F.sum(F.col('TRA_60d') * F.col('nArticles')).over(rolling60d_window))
-weightedTRA2 = weightedTRA2.withColumn('weightedTRA_60d_dem', F.sum('nArticles').over(rolling60d_window))
-weightedRollingAvgs = weightedTRA2.withColumn('weightedTRA_60d', F.col('weightedTRA_60d_num')/F.col('weightedTRA_60d_dem'))
-weightedRollingAvgs.limit(10).toPandas()
-
-# COMMAND ----------
-
 # DBTITLE 1,Select Output Data
 targetValueOutput = weightedRollingAvgs.select('ActionGeo_FullName','EventTimeDate','EventRootCodeString','nArticles','avgConfidence',
-                                          'GoldsteinReportValue','GRA_3d','GRA_60d','weightedGRA_3d','weightedGRA_60d',
-                                          'ToneReportValue','TRA_3d','TRA_60d','weightedTRA_3d','weightedTRA_60d',
-                                          'EventReportValue','ERA_3d','ERA_60d','weightedERA_3d','weightedERA_60d')
+                                          'GoldsteinReportValue','wGRA_3d','wGRA_60d','ToneReportValue','wTRA_3d','wTRA_60d',
+                                          'EventReportValue','wERA_3d','wERA_60d')
 
 print((targetValueOutput.count(), len(targetValueOutput.columns)))
 targetValueOutput.limit(2).toPandas()
