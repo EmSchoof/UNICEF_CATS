@@ -129,6 +129,10 @@ gdeltTargetOutput.schema
 # DBTITLE 1,Verify Event Code is Present per Day (*slower code*)
 event_codes = ['MAKE PUBLIC STATEMENT', 'APPEAL', 'EXPRESS INTENT TO COOPERATE', 'CONSULT', 'ENGAGE IN DIPLOMATIC COOPERATION', 'ENGAGE IN MATERIAL COOPERATION', 'PROVIDE AID', 'YIELD', 'INVESTIGATE', 'DEMAND', 'DISAPPROVE', 'REJECT', 'THREATEN', 'PROTEST', 'EXHIBIT MILITARY POSTURE', 'REDUCE RELATIONS', 'COERCE', 'ASSAULT', 'FIGHT', 'ENGAGE IN UNCONVENTIONAL MASS VIOLENCE']
 
+##
+test = gdeltTargetOutput
+##
+
 gdeltTargetOutput.createOrReplaceTempView("targets")
 countryList = [x['ActionGeo_FullName'] for x in sqlContext.sql("select ActionGeo_FullName from targets").rdd.collect()]
 
@@ -147,7 +151,7 @@ for country in countryList:
         # append row to dataframe
         blank_list = [[country, date, event_code, 0.0, 0.0, 0.0, 0]]
         blank_df = spark.createDataFrame(blank_list, gdeltTargetOutput.schema)
-        gdeltTargetOutput = gdeltTargetOutput.union(blank_df)
+        test = test.union(blank_df)
 
 # COMMAND ----------
 
@@ -195,25 +199,13 @@ gdeltTargetOutputPartitioned.limit(2).toPandas()
 # COMMAND ----------
 
 # verify output
-AFG_01feb2021 = gdeltTargetOutputPartitioned.filter((F.col('ActionGeo_FullName') == 'Afghanistan') & (F.col('EventTimeDate') == '2021-02-01'))
-SOM_02jan2021 = gdeltTargetOutputPartitioned.filter((F.col('ActionGeo_FullName') == 'Somalia') & (F.col('EventTimeDate') == '2021-01-02'))
-AFG_03feb2021 = gdeltTargetOutputPartitioned.filter((F.col('ActionGeo_FullName') == 'Afghanistan') & (F.col('EventTimeDate') == '2021-02-03'))
-#print('Event Report Values for One Country Per Day Should Sum to 100% (or 1)')
-#print(AFG_01feb2021.select(F.sum('EventReportValue')).collect()[0][0])
-#print(AFG_02feb2021.select(F.sum('EventReportValue')).collect()[0][0])
-#print(AFG_03feb2021.select(F.sum('EventReportValue')).collect()[0][0])
-AFG_01feb2021.toPandas()
-
-# do for one or two -> select different countries and different days
-
-# COMMAND ----------
-
-# verify output
 sumERV = gdeltTargetOutputPartitioned.select('EventTimeDate','ActionGeo_FullName','EventReportValue').groupBy('EventTimeDate', 'ActionGeo_FullName').agg(F.sum('EventReportValue'))
+sumERV.limit(2).toPandas()
 
 # COMMAND ----------
 
-gdeltTargetOutputPartitioned.limit(10).toPandas()
+print('Verify all sum(EventReportValue)s are 1')
+plt.plot(sumERV.select('sum(EventReportValue)').toPandas())
 
 # COMMAND ----------
 
@@ -235,34 +227,66 @@ rolling60d_window = Window.partitionBy('ActionGeo_FullName', 'EventRootCodeStrin
 
 # COMMAND ----------
 
-# get WEIGHTED average of the Event Report Value (ERV) within Country Window
-
-
-
+# DBTITLE 1,Event Report Value (ERV) within Country Window
+# get WEIGHTED 3d average
 weightedERA1 = gdeltTargetOutputPartitioned.withColumn('wERA_3d_num', F.sum(F.col('EventReportValue') * F.col('nArticles')).over(rolling3d_window))
 weightedERA1 = weightedERA1.withColumn('wERA_3d_dem', F.sum('nArticles').over(rolling3d_window))
 weightedERA1 = weightedERA1.withColumn('wERA_3d', F.col('wERA_3d_num')/F.col('wERA_3d_dem'))
 
-gdeltTargetOutputPartitioned = gdeltTargetOutputPartitioned.withColumn('wERA_3d', weightedERA1.select('weightedERA1'))
+# get WEIGHTED 60d average
+weightedERA2 = weightedERA1.withColumn('wERA_60d_num', F.sum(F.col('EventReportValue') * F.col('nArticles')).over(rolling60d_window))
+weightedERA2 = weightedERA2.withColumn('wERA_60d_dem', F.sum('nArticles').over(rolling60d_window))
+weightedERA2 = weightedERA2.withColumn('wERA_60d', F.col('wERA_60d_num')/F.col('wERA_60d_dem'))
+
+# drop extra columns
+weightedERA2 = weightedERA2.drop('wERA_3d_num', 'wERA_3d_dem', 'wERA_60d_num', 'wERA_60d_dem')
+weightedERA2.limit(2).toPandas()
 
 # COMMAND ----------
 
-# DBTITLE 1,Calculate Weighted Averages of Rolling Values
+# DBTITLE 1,Goldstein Report Value (GRV) within Country Window
+# get WEIGHTED 3d average
+weightedGRA1 = weightedERA2.withColumn('wGRA_3d_num', F.sum(F.col('GoldsteinReportValue') * F.col('nArticles')).over(rolling3d_window))
+weightedGRA1 = weightedGRA1.withColumn('wGRA_3d_dem', F.sum('nArticles').over(rolling3d_window))
+weightedGRA1 = weightedGRA1.withColumn('wGRA_3d', F.col('wGRA_3d_num')/F.col('wGRA_3d_dem'))
+
+# get WEIGHTED 60d average
+weightedGRA2 = weightedGRA1.withColumn('wGRA_60d_num', F.sum(F.col('GoldsteinReportValue') * F.col('nArticles')).over(rolling60d_window))
+weightedGRA2 = weightedGRA2.withColumn('wGRA_60d_dem', F.sum('nArticles').over(rolling60d_window))
+weightedGRA2 = weightedGRA2.withColumn('wGRA_60d', F.col('wGRA_60d_num')/F.col('wGRA_60d_dem'))
+
+# drop extra columns
+weightedGRA2 = weightedGRA2.drop('wGRA_3d_num', 'wGRA_3d_dem', 'wGRA_60d_num', 'wGRA_60d_dem')
+weightedGRA2.limit(2).toPandas()
+
+# COMMAND ----------
+
+# DBTITLE 1,Tone Report Value (TRV) within Country Window
+# get WEIGHTED 3d average
+weightedTRA1 = weightedGRA2.withColumn('wTRA_3d_num', F.sum(F.col('ToneReportValue') * F.col('nArticles')).over(rolling3d_window))
+weightedTRA1 = weightedTRA1.withColumn('wTRA_3d_dem', F.sum('nArticles').over(rolling3d_window))
+weightedTRA1 = weightedTRA1.withColumn('wTRA_3d', F.col('wTRA_3d_num')/F.col('wTRA_3d_dem'))
+
+# get WEIGHTED 60d average
+weightedTRA2 = weightedTRA1.withColumn('wTRA_60d_num', F.sum(F.col('ToneReportValue') * F.col('nArticles')).over(rolling60d_window))
+weightedTRA2 = weightedTRA2.withColumn('wTRA_60d_dem', F.sum('nArticles').over(rolling60d_window))
+weightedTRA2 = weightedTRA2.withColumn('wTRA_60d', F.col('wTRA_60d_num')/F.col('wTRA_60d_dem'))
+
+# drop extra columns
+targetValueOutput = weightedTRA2.drop('wTRA_3d_num', 'wTRA_3d_dem', 'wTRA_60d_num', 'wTRA_60d_dem')
+
+# verify output data
+print((targetValueOutput.count(), len(targetValueOutput.columns)))
+targetValueOutput.limit(2).toPandas()
+
+# COMMAND ----------
+
+# DBTITLE 0,Calculate Weighted Averages of Rolling Values
 def weighted_avg(original_avg, sample_n):
   return np.sum(original_avg * sample_n) / np.sum(sample_n)
 
 
 weightedAvg = F.udf(lambda col: F.sum(F.col(col) * F.col('nArticles')) / F.sum('nArticles'))
-
-# COMMAND ----------
-
-# DBTITLE 1,Select Output Data
-targetValueOutput = weightedRollingAvgs.select('ActionGeo_FullName','EventTimeDate','EventRootCodeString','nArticles','avgConfidence',
-                                          'GoldsteinReportValue','wGRA_3d','wGRA_60d','ToneReportValue','wTRA_3d','wTRA_60d',
-                                          'EventReportValue','wERA_3d','wERA_60d')
-
-print((targetValueOutput.count(), len(targetValueOutput.columns)))
-targetValueOutput.limit(2).toPandas()
 
 # COMMAND ----------
 
@@ -277,57 +301,40 @@ def plot_corr_matrix(correlations,attr,fig_no):
     fig.colorbar(cax)
     plt.show()
 
+def get_corr(cols):
+  # select variables to check correlation
+  df_features = targetValueOutput.select(cols) 
+
+  # create RDD table for correlation calculation
+  rdd_table = df_features.rdd.map(lambda row: row[0:])
+
+  # get the correlation matrix
+  corr_mat=Statistics.corr(rdd_table, method="pearson")
+  plot_corr_matrix(corr_mat, df_features.columns, 234)
+
 # COMMAND ----------
 
 # DBTITLE 1,EventReportValue
 # select variables to check correlation
-df_features = targetValueOutput.select('avgConfidence','EventReportValue','weightedERA_3d','weightedERA_60d') 
-
-# create RDD table for correlation calculation
-rdd_table = df_features.rdd.map(lambda row: row[0:])
-
-# get the correlation matrix
-corr_mat=Statistics.corr(rdd_table, method="pearson")
-plot_corr_matrix(corr_mat, df_features.columns, 234)
+get_corr(['avgConfidence','EventReportValue','wERA_3d','wERA_60d']) 
 
 # COMMAND ----------
 
 # DBTITLE 1,GoldsteinReportValue
 # select variables to check correlation
-df_features = targetValueOutput.select('avgConfidence','GoldsteinReportValue','weightedGRA_3d','weightedGRA_60d') 
-
-# create RDD table for correlation calculation
-rdd_table = df_features.rdd.map(lambda row: row[0:])
-
-# get the correlation matrix
-corr_mat=Statistics.corr(rdd_table, method="pearson")
-plot_corr_matrix(corr_mat, df_features.columns, 234)
+get_corr(['avgConfidence','GoldsteinReportValue','wGRA_3d','wGRA_60d']) 
 
 # COMMAND ----------
 
 # DBTITLE 1,ToneReportValue
 # select variables to check correlation
-df_features = targetValueOutput.select('avgConfidence','ToneReportValue','weightedTRA_3d','weightedTRA_60d') 
-
-# create RDD table for correlation calculation
-rdd_table = df_features.rdd.map(lambda row: row[0:])
-
-# get the correlation matrix
-corr_mat=Statistics.corr(rdd_table, method="pearson")
-plot_corr_matrix(corr_mat, df_features.columns, 234)
+get_corr(['avgConfidence','ToneReportValue','wTRA_3d','wTRA_60d'])
 
 # COMMAND ----------
 
 # DBTITLE 1,Overall
 # select variables to check correlation
-df_features = targetValueOutput.select('weightedERA_3d','weightedERA_60d','weightedGRA_3d','weightedGRA_60d','weightedTRA_3d','weightedTRA_60d') 
-
-# create RDD table for correlation calculation
-rdd_table = df_features.rdd.map(lambda row: row[0:])
-
-# get the correlation matrix
-corr_mat=Statistics.corr(rdd_table, method="pearson")
-plot_corr_matrix(corr_mat, df_features.columns, 234)
+get_corr(['wERA_3d','wERA_60d','wGRA_3d','wGRA_60d','wTRA_3d','wTRA_60d']) 
 
 # COMMAND ----------
 
