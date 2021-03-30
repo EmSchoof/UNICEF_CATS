@@ -138,10 +138,13 @@ for date in dateList:
 
 # COMMAND ----------
 
-# DBTITLE 1,Verify Event Code is Present per Day
+# DBTITLE 1,Verify Event Code is Present per Day (*slower code*)
 event_codes = ['MAKE PUBLIC STATEMENT', 'APPEAL', 'EXPRESS INTENT TO COOPERATE', 'CONSULT', 'ENGAGE IN DIPLOMATIC COOPERATION', 'ENGAGE IN MATERIAL COOPERATION', 'PROVIDE AID', 'YIELD', 'INVESTIGATE', 'DEMAND', 'DISAPPROVE', 'REJECT', 'THREATEN', 'PROTEST', 'EXHIBIT MILITARY POSTURE', 'REDUCE RELATIONS', 'COERCE', 'ASSAULT', 'FIGHT', 'ENGAGE IN UNCONVENTIONAL MASS VIOLENCE']
 
-for country in gdeltTargetOutput.select(F.col('ActionGeo_FullName')):
+gdeltTargetOutput.createOrReplaceTempView("targets")
+countryList = [x['ActionGeo_FullName'] for x in sqlContext.sql("select ActionGeo_FullName from targets").rdd.collect()]
+
+for country in countryList:
   country_df = gdeltTargetOutput.filter(F.col('ActionGeo_FullName') == country)
   country_df.createOrReplaceTempView("country")
   dateList = [x['EventTimeDate'] for x in sqlContext.sql("select EventTimeDate from country").rdd.collect()]
@@ -160,7 +163,7 @@ for country in gdeltTargetOutput.select(F.col('ActionGeo_FullName')):
 
 # COMMAND ----------
 
-# DBTITLE 1,*SLOW CODE* in Pandas -- backup if above code does not run w/o errors
+# DBTITLE 1,*Viable Pandas Code but DO NOT RUN (SLOW)* -- backup if above code does not run w/o errors
 # convert to pandas
 dataframe = gdeltTargetOutput.toPandas()
 
