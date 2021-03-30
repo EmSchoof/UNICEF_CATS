@@ -122,19 +122,7 @@ gdeltTargetOutput.limit(2).toPandas()
 
 # COMMAND ----------
 
-gdeltTargetOutputPartitioned.printSchema()
-
-# COMMAND ----------
-
 gdeltTargetOutput.schema
-
-# COMMAND ----------
-
-gdeltTargetOutput.createOrReplaceTempView("test")
-dateList = [x['EventTimeDate'] for x in sqlContext.sql("select EventTimeDate from test").rdd.collect()]
-
-for date in dateList:
-  print(date)
 
 # COMMAND ----------
 
@@ -201,18 +189,14 @@ gdeltTargetOutput.limit(10).toPandas()
 countriesDaily_window = Window.partitionBy('EventTimeDate', 'ActionGeo_FullName').orderBy('EventTimeDate')
 
 # get daily distribution of articles for each Event Code string within Window
-gdeltTargetOutputPartitioned = gdeltTargetOutputModified .withColumn('EventReportValue', F.col('nArticles')/F.sum('nArticles').over(countriesDaily_window))
+gdeltTargetOutputPartitioned = gdeltTargetOutput.withColumn('EventReportValue', F.col('nArticles')/F.sum('nArticles').over(countriesDaily_window))
 gdeltTargetOutputPartitioned.limit(2).toPandas()
-
-# COMMAND ----------
-
-
 
 # COMMAND ----------
 
 # verify output
 AFG_01feb2021 = gdeltTargetOutputPartitioned.filter((F.col('ActionGeo_FullName') == 'Afghanistan') & (F.col('EventTimeDate') == '2021-02-01'))
-AFG_02feb2021 = gdeltTargetOutputPartitioned.filter((F.col('ActionGeo_FullName') == 'Afghanistan') & (F.col('EventTimeDate') == '2021-02-02'))
+SOM_02jan2021 = gdeltTargetOutputPartitioned.filter((F.col('ActionGeo_FullName') == 'Somalia') & (F.col('EventTimeDate') == '2021-01-02'))
 AFG_03feb2021 = gdeltTargetOutputPartitioned.filter((F.col('ActionGeo_FullName') == 'Afghanistan') & (F.col('EventTimeDate') == '2021-02-03'))
 #print('Event Report Values for One Country Per Day Should Sum to 100% (or 1)')
 #print(AFG_01feb2021.select(F.sum('EventReportValue')).collect()[0][0])
@@ -225,7 +209,11 @@ AFG_01feb2021.toPandas()
 # COMMAND ----------
 
 # verify output
-sumERV = gdeltTargetOutputPartitioned.withColumn('sumERV', F.sum('EventReportValue')).over(countriesDaily_window)
+sumERV = gdeltTargetOutputPartitioned.select('EventTimeDate','ActionGeo_FullName','EventReportValue').groupBy('EventTimeDate', 'ActionGeo_FullName').agg(F.sum('EventReportValue'))
+
+# COMMAND ----------
+
+gdeltTargetOutputPartitioned.limit(10).toPandas()
 
 # COMMAND ----------
 
