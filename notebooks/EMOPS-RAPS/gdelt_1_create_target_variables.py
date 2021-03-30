@@ -1,9 +1,12 @@
 # Databricks notebook source
-# MAGIC %md
+# MAGIC %md 
 # MAGIC 
 # MAGIC ### Periods of Analysis
 # MAGIC - Period of Analysis 1 (PA1): 3 days
 # MAGIC - Period of Analysis 2 (PA2): 60 days 
+# MAGIC 
+# MAGIC ### Premise of Task
+# MAGIC - Anomaly detection of target variables
 # MAGIC 
 # MAGIC ### Calculations – Distribution of Articles by Country by Event Type
 # MAGIC 
@@ -119,21 +122,74 @@ gdeltTargetOutput.limit(2).toPandas()
 
 # COMMAND ----------
 
+gdeltTargetOutputPartitioned.printSchema()
+
+# COMMAND ----------
+
+gdeltTargetOutput.schema
+
+# COMMAND ----------
+
+gdeltTargetOutput.createOrReplaceTempView("test")
+dateList = [x['EventTimeDate'] for x in sqlContext.sql("select EventTimeDate from test").rdd.collect()]
+
+for date in dateList:
+  print(date)
+
+# COMMAND ----------
+
 # DBTITLE 1,Verify Event Code is Present per Day
 event_codes = ['MAKE PUBLIC STATEMENT', 'APPEAL', 'EXPRESS INTENT TO COOPERATE', 'CONSULT', 'ENGAGE IN DIPLOMATIC COOPERATION', 'ENGAGE IN MATERIAL COOPERATION', 'PROVIDE AID', 'YIELD', 'INVESTIGATE', 'DEMAND', 'DISAPPROVE', 'REJECT', 'THREATEN', 'PROTEST', 'EXHIBIT MILITARY POSTURE', 'REDUCE RELATIONS', 'COERCE', 'ASSAULT', 'FIGHT', 'ENGAGE IN UNCONVENTIONAL MASS VIOLENCE']
 
-for country in dataframe:
-  country_df = dataframe.loc[ col == country ]
+for country in gdeltTargetOutput.select(F.col('ActionGeo_FullName')):
+  country_df = gdeltTargetOutput.filter(F.col('ActionGeo_FullName') == country)
+  country_df.createOrReplaceTempView("country")
+  dateList = [x['EventTimeDate'] for x in sqlContext.sql("select EventTimeDate from country").rdd.collect()]
   
-  for date in country_df['date']:
-    date_df = country_df.loc[ df['date'] == date ]
+  for date in dateList:
+    date_df = country_df.filter(F.col('EventTimeDate') == date)
     
     for event_code in event_codes:
-      
-      if date_df['event_code'].contains(event_code):
-        skip
+      if date_df.filter(F.col('EventRootCodeString') == event_code) == True: # .contains(event_code):
+        next
       else:
-        date_df.append({country: country, date: date, eventrootcode: event_code, avgconfidence: 0, golstein: o, tone: 0, nArticles: 0})
+        # append row to dataframe
+        blank_list = [[country, date, event_code, 0.0, 0.0, 0.0, 0]]
+        blank_df = spark.createDataFrame(blank_list, gdeltTargetOutput.schema)
+        gdeltTargetOutput = gdeltTargetOutput.union(blank_df)
+
+# COMMAND ----------
+
+# DBTITLE 1,*SLOW CODE* in Pandas -- backup if above code does not run w/o errors
+# convert to pandas
+dataframe = gdeltTargetOutput.toPandas()
+
+for country in dataframe['ActionGeo_FullName']:
+  country_df = dataframe.loc[ dataframe['ActionGeo_FullName'] == country]
+  
+  for date in country_df['EventTimeDate']:
+    date_df = country_df.loc[ dataframe['EventTimeDate'] == date]
+
+    for event_code in event_codes:
+      if event_code in date_df['EventRootCodeString']: 
+        next
+      else:
+        #blank_list = [[country, date, event_code, 0, 0, 0, 0]]
+        #blank_df = spark.createDataFrame(blank_list, final_struc)
+        dataframe = dataframe.append({'ActionGeo_FullName': country, 
+                                      'EventTimeDate': date, 
+                                      'EventRootCodeString': event_code,
+                                      'avgConfidence': 0, 
+                                      'GoldsteinReportValue': 0, 
+                                      'ToneReportValue': 0, 
+                                      'nArticles': 0}, ignore_index=True)
+
+# convert back to PySpark        
+gdeltTargetOutputModified = spark.createDataFrame(dataframe)
+
+# COMMAND ----------
+
+gdeltTargetOutput.limit(10).toPandas()
 
 # COMMAND ----------
 
@@ -142,8 +198,12 @@ for country in dataframe:
 countriesDaily_window = Window.partitionBy('EventTimeDate', 'ActionGeo_FullName').orderBy('EventTimeDate')
 
 # get daily distribution of articles for each Event Code string within Window
-gdeltTargetOutputPartitioned = gdeltTargetOutput.withColumn('EventReportValue', F.col('nArticles')/F.sum('nArticles').over(countriesDaily_window))
+gdeltTargetOutputPartitioned = gdeltTargetOutputModified .withColumn('EventReportValue', F.col('nArticles')/F.sum('nArticles').over(countriesDaily_window))
 gdeltTargetOutputPartitioned.limit(2).toPandas()
+
+# COMMAND ----------
+
+
 
 # COMMAND ----------
 
