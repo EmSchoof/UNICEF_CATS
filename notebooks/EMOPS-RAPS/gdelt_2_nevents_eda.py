@@ -18,15 +18,15 @@
 # MAGIC when the *Event Report Value* for a given PA2 (*60 DAYS*) is <strike>one standard deviation</strike>  above ERA2*
 # MAGIC 
 # MAGIC 
+# MAGIC *New Methodology*
+# MAGIC - (1.0) Compute three day average for all the data values you have across all years. 
+# MAGIC - (1.a) Your result will be X = [x1, x2, x3, ... xn]
+# MAGIC - (2.0) Set a threshhold parameter z. // benchmark special parameter (needs to be established per country?) come up with a "Ground Truth" value
+# MAGIC - (3.0) For each value in X, compare with z 
 # MAGIC 
-# MAGIC Compute three day average for all the data values you have across all years. 
-# MAGIC Your result will be X = [x1, x2, x3, ... xn]
-# MAGIC Set a threshhold parameter z. // benchmark special parameter (needs to be established per country?) come up with a "Ground Truth" value
-# MAGIC For each value in X, compare with z 
-# MAGIC 
-# MAGIC 
-# MAGIC 1 - [create a list of 3 day moving averages from today - 365 days] // compare this list with defined 'z' anomalist behavior to the current 3 day average per EventRootCode
-# MAGIC 2 - [create a list of 60 day moving averages from today - 730 days] // compare this list with defined 'z' anomalist behavior to the current 60 day average per EventRootCode
+# MAGIC *Execution of Methodology*
+# MAGIC - 1 - [create a list of 3 day moving averages from today - 365 days] // compare this list with defined 'z' anomalist behavior to the current 3 day average per EventRootCode
+# MAGIC - 2 - [create a list of 60 day moving averages from today - 730 days] // compare this list with defined 'z' anomalist behavior to the current 60 day average per EventRootCode
 # MAGIC 
 # MAGIC 
 # MAGIC Sources:
@@ -68,8 +68,7 @@ preprocessedGDELT.limit(10).toPandas()
 # COMMAND ----------
 
 # DBTITLE 1,Select Events Data
-eventsData = preprocessedGDELT.select('ActionGeo_FullName','EventTimeDate','EventRootCodeString','nArticles','avgConfidence',
-                                          'EventReportValue','ERA_3d','ERA_60d','weightedERA_3d','weightedERA_60d')
+eventsData = preprocessedGDELT.select('ActionGeo_FullName','EventTimeDate','EventRootCodeString','nArticles','avgConfidence','EventReportValue','wERA_3d','wERA_60d')
 
 print((eventsData.count(), len(eventsData.columns)))
 eventsData.limit(2).toPandas()
@@ -80,10 +79,6 @@ eventsData.limit(2).toPandas()
 # create conflict column
 conflict_events = ['DEMAND','DISAPPROVE','PROTEST','REJECT','THREATEN','ASSAULT','COERCE','ENGAGE IN UNCONVENTIONAL MASS VIOLENCE','EXHIBIT MILITARY POSTURE','FIGHT','REDUCE RELATIONS']
 eventsData = eventsData.withColumn('if_conflict', F.when(F.col('EventRootCodeString').isin(conflict_events), True).otherwise(False))
-
-# COMMAND ----------
-
-display(eventsData)
 
 # COMMAND ----------
 
@@ -194,6 +189,11 @@ afg_erv_nonconflict = eda_funcs(df=eventsData, country='Afghanistan', col='Event
 
 # COMMAND ----------
 
+# ERV_3d: Apply Kruskal-Wallis H-test
+stats.kruskal(afg_erv_conflict, afg_erv_nonconflict)
+
+# COMMAND ----------
+
 # MAGIC %md
 # MAGIC ### wERA 3D
 
@@ -207,6 +207,11 @@ afg_erv3d_nonconflict = eda_funcs(df=eventsData, country='Afghanistan', col='wER
 
 # COMMAND ----------
 
+# ERV_3d: Apply Kruskal-Wallis H-test
+stats.kruskal(afg_erv3d_conflict, afg_erv3d_nonconflict)
+
+# COMMAND ----------
+
 # MAGIC %md
 # MAGIC ### wERA 60D
 
@@ -217,6 +222,11 @@ afg_erv60d_conflict = eda_funcs(df=eventsData, country='Afghanistan', col='wERA_
 # COMMAND ----------
 
 afg_erv60d_nonconflict = eda_funcs(df=eventsData, country='Afghanistan', col='wERA_60d', conflict=False)
+
+# COMMAND ----------
+
+# ERV_3d: Apply Kruskal-Wallis H-test
+stats.kruskal(afg_erv60d_conflict, afg_erv60d_nonconflict)
 
 # COMMAND ----------
 
@@ -258,7 +268,7 @@ afg_erv60d_nonconflict = eda_funcs(df=eventsData, country='Afghanistan', col='wE
 
 # COMMAND ----------
 
-# ERV_3d
+# ERV_3d: Apply Kruskal-Wallis H-test
 stats.kruskal(afg_erv3d_conflict, afg_erv3d_nonconflict)
 
 # COMMAND ----------
