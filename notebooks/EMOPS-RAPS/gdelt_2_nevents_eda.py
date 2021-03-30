@@ -176,10 +176,8 @@ def eda_funcs(df, country, col, conflict=True):
 
 # COMMAND ----------
 
-AFG_3d = eventsData.filter(F.col('ActionGeo_FullName') == 'Afghanistan').select('EventReportValue', 'ERA_3d', 'WeightedERA_3d').toPandas()
-sns.pairplot(AFG_3d)
-AFG_60d = eventsData.filter(F.col('ActionGeo_FullName') == 'Afghanistan').select('EventReportValue', 'ERA_3d','ERA_60d', 'WeightedERA_60d').toPandas()
-sns.pairplot(AFG_60d)
+AFG = eventsData.filter(F.col('ActionGeo_FullName') == 'Afghanistan').select('EventReportValue', 'wERA_3d', 'wERA_60d').toPandas()
+sns.pairplot(AFG)
 
 # COMMAND ----------
 
@@ -197,54 +195,28 @@ afg_erv_nonconflict = eda_funcs(df=eventsData, country='Afghanistan', col='Event
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ### ERA 3D
+# MAGIC ### wERA 3D
 
 # COMMAND ----------
 
-afg_erv3d_conflict = eda_funcs(df=eventsData, country='Afghanistan', col='ERA_3d', conflict=True)
+afg_erv3d_conflict = eda_funcs(df=eventsData, country='Afghanistan', col='wERA_3d', conflict=True)
 
 # COMMAND ----------
 
-afg_erv3d_nonconflict = eda_funcs(df=eventsData, country='Afghanistan', col='ERA_3d', conflict=False)
-
-# COMMAND ----------
-
-# MAGIC %md
-# MAGIC ### ERA 60D
-
-# COMMAND ----------
-
-afg_erv60d_conflict = eda_funcs(df=eventsData, country='Afghanistan', col='ERA_60d', conflict=True)
-
-# COMMAND ----------
-
-afg_erv60d_nonconflict = eda_funcs(df=eventsData, country='Afghanistan', col='ERA_60d', conflict=False)
+afg_erv3d_nonconflict = eda_funcs(df=eventsData, country='Afghanistan', col='wERA_3d', conflict=False)
 
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ### Weighted ERA 3D
+# MAGIC ### wERA 60D
 
 # COMMAND ----------
 
-afg_erv3d_weighted_conflict = eda_funcs(df=eventsData, country='Afghanistan', col='weightedERA_3d', conflict=True)
+afg_erv60d_conflict = eda_funcs(df=eventsData, country='Afghanistan', col='wERA_60d', conflict=True)
 
 # COMMAND ----------
 
-afg_erv3d_weighted_nonconflict = eda_funcs(df=eventsData, country='Afghanistan', col='weightedERA_3d', conflict=False)
-
-# COMMAND ----------
-
-# MAGIC %md
-# MAGIC ### Weighted ERA 60D
-
-# COMMAND ----------
-
-afg_erv60d_weighted_conflict = eda_funcs(df=eventsData, country='Afghanistan', col='weightedERA_60d', conflict=True)
-
-# COMMAND ----------
-
-afg_erv60d_weighted_nonconflict = eda_funcs(df=eventsData, country='Afghanistan', col='weightedERA_60d', conflict=False)
+afg_erv60d_nonconflict = eda_funcs(df=eventsData, country='Afghanistan', col='wERA_60d', conflict=False)
 
 # COMMAND ----------
 
@@ -303,47 +275,3 @@ stats.kruskal(afg_erv60d_conflict, afg_erv60d_nonconflict)
 
 # Weighted ERA_60d
 stats.kruskal(afg_erv60d_weighted_conflict, afg_erv60d_weighted_nonconflict)
-
-# COMMAND ----------
-
-# MAGIC %md 
-# MAGIC ### ARC SINE
-
-# COMMAND ----------
-
-arcsine = F.udf(lambda x: float(np.arcsin(x)), FloatType())
-spark.udf.register("arcsine", arcsine)
-AFG = eventsData.filter(F.col('ActionGeo_FullName') == 'Afghanistan')
-AFG.createOrReplaceTempView('afg')
-
-# COMMAND ----------
-
-test_list = spark.sql("select arcsine(weightedERA_3d) from afg")
-#AFG = AFG.toPandas()
-AFG = AFG.join(test_list)
-#AFG["arcsine(weightedERA_60d)"] = test_list
-#AFG.head(5)
-AFG.limit(10).toPandas()
-
-# COMMAND ----------
-
-def eda_funcs(df, country, col, conflict=True): 
-  
-  if conflict == True:
-      name = 'Conflict'
-      df1 = df.filter((F.col('ActionGeo_FullName') == country) & (F.col('if_conflict') == True))
-      list_vals = df.select(col).rdd.flatMap(lambda x: x).collect()
-  else:
-      name = 'NonConflict'  
-      df1 = df.filter((F.col('ActionGeo_FullName') == country) & (F.col('if_conflict') != True))
-      list_vals = df.select(col).rdd.flatMap(lambda x: x).collect()
-  
-  print('Get ' + name + ' Quantiles for ' + col)
-  get_quantiles(df1, col)
-  plot_boxplot(list_vals, col)
-  plot_dist(df1, col)
-  plot_ecdf(list_vals,  name + ' ' +  col)
-  return list_vals
-
-
-test_list2 = eda_funcs(df=eventsData, 'arcsine(EventReportValue)', test_list)
