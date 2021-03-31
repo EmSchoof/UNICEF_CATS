@@ -69,7 +69,6 @@ preprocessedGDELT.limit(10).toPandas()
 
 # DBTITLE 1,Select Events Data
 eventsData = preprocessedGDELT.select('ActionGeo_FullName','EventTimeDate','EventRootCodeString','nArticles','avgConfidence','EventReportValue','wERA_3d','wERA_60d')
-
 print((eventsData.count(), len(eventsData.columns)))
 eventsData.limit(2).toPandas()
 
@@ -79,6 +78,10 @@ eventsData.limit(2).toPandas()
 # create conflict column
 conflict_events = ['DEMAND','DISAPPROVE','PROTEST','REJECT','THREATEN','ASSAULT','COERCE','ENGAGE IN UNCONVENTIONAL MASS VIOLENCE','EXHIBIT MILITARY POSTURE','FIGHT','REDUCE RELATIONS']
 eventsData = eventsData.withColumn('if_conflict', F.when(F.col('EventRootCodeString').isin(conflict_events), True).otherwise(False))
+
+# COMMAND ----------
+
+eventsData.limit(10).toPandas()
 
 # COMMAND ----------
 
@@ -176,12 +179,16 @@ sns.pairplot(AFG)
 
 # COMMAND ----------
 
+event_codes = ['MAKE PUBLIC STATEMENT', 'APPEAL', 'EXPRESS INTENT TO COOPERATE', 'CONSULT', 'ENGAGE IN DIPLOMATIC COOPERATION', 'ENGAGE IN MATERIAL COOPERATION', 'PROVIDE AID', 'YIELD', 'INVESTIGATE', 'DEMAND', 'DISAPPROVE', 'REJECT', 'THREATEN', 'PROTEST', 'EXHIBIT MILITARY POSTURE', 'REDUCE RELATIONS', 'COERCE', 'ASSAULT', 'FIGHT', 'ENGAGE IN UNCONVENTIONAL MASS VIOLENCE']
+
+# COMMAND ----------
+
 # MAGIC %md
 # MAGIC ### ERV
 
 # COMMAND ----------
 
-afg_erv_conflict = eda_funcs(df=eventsData, country='Afghanistan', col='EventReportValue', conflict=True)
+afg_erv_conflict = eda_funcs(df=eventsData, country='Afghanistan', col='EventReportValue', conflict=True) #eventcode='',
 
 # COMMAND ----------
 
@@ -259,29 +266,3 @@ stats.kruskal(afg_erv60d_conflict, afg_erv60d_nonconflict)
 # MAGIC 
 # MAGIC 
 # MAGIC (B) Another option is to transform the data in order create a normally-distributed variable. Since this variable is a percentage, one post suggested transforming the data via the arcsine method [source](https://www.researchgate.net/post/Should_I_do_log_transform_percentage_data_of_cell_subsets_measured_with_FACS/54b682a5d2fd645a788b4686/citation/download). Arcsine, or angular, transformation is the preferred variable transformation for multivariant problems where both 0% and 100% are viable options. [source](http://strata.uga.edu/8370/rtips/proportions.html#:~:text=The%20arcsine%20transformation%20(also%20called,square%20root%20of%20the%20proportion.&text=Multiplying%20by%20two%20makes%20the,scale%20stop%20at%20pi%2F2.)
-
-# COMMAND ----------
-
-# MAGIC %md
-# MAGIC 
-# MAGIC #### Option A - Apply Kruskal-Wallis H-test
-
-# COMMAND ----------
-
-# ERV_3d: Apply Kruskal-Wallis H-test
-stats.kruskal(afg_erv3d_conflict, afg_erv3d_nonconflict)
-
-# COMMAND ----------
-
-# ERA_3d Weighted
-stats.kruskal(afg_erv3d_weighted_conflict, afg_erv3d_weighted_nonconflict)
-
-# COMMAND ----------
-
-# ERA_60d
-stats.kruskal(afg_erv60d_conflict, afg_erv60d_nonconflict)
-
-# COMMAND ----------
-
-# Weighted ERA_60d
-stats.kruskal(afg_erv60d_weighted_conflict, afg_erv60d_weighted_nonconflict)
