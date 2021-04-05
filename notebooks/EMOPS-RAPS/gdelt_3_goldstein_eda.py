@@ -9,7 +9,7 @@
 # MAGIC -	Goldstein Running Average (GRA2):
 # MAGIC Calculated as the rolling average of the GPV for PA2 over the previous 24 months
 # MAGIC -	Goldstein spike alert: 
-# MAGIC When the *Goldstein Point Value* for a given PA1 (*3 DAYS*) is one standard deviation above GRA1* 
+# MAGIC When the *Goldstein Point Value* for a given PA1 (*1 DAYS*) is one standard deviation above GRA1* 
 # MAGIC -	Goldstein trend alert: 
 # MAGIC when the *Goldstein Point Value* for a given PA2 (*60 DAYS*) is one standard deviation above GRA2*
 
@@ -47,25 +47,18 @@ preprocessedGDELT = spark.read.format("csv") \
   .option("inferSchema", infer_schema) \
   .option("header", first_row_is_header) \
   .option("sep", delimiter) \
-  .load("/Filestore/tables/tmp/gdelt/targetvalues.csv")
+  .load("/Filestore/tables/tmp/gdelt/gold_tone_targetvalues.csv")
 print((preprocessedGDELT.count(), len(preprocessedGDELT.columns)))
 preprocessedGDELT.limit(10).toPandas()
 
 # COMMAND ----------
 
 # DBTITLE 1,Select Goldstein Data
-goldsteinData = preprocessedGDELT.select('ActionGeo_FullName','EventTimeDate','EventRootCodeString','nArticles','avgConfidence',
-                                          'GoldsteinReportValue','weightedGRA_3d','weightedGRA_60d')
+goldsteinData = preprocessedGDELT.select('ActionGeo_FullName','EventTimeDate','nArticles','avgConfidence',
+                                          'GoldsteinReportValue','wGRA_1d','wGRA_60d', 'if_conflict')
 
 print((goldsteinData.count(), len(goldsteinData.columns)))
 goldsteinData.limit(2).toPandas()
-
-# COMMAND ----------
-
-# DBTITLE 1,Explore Values in Conflict vs Not Situations
-# create conflict column
-conflict_events = ['DEMAND','DISAPPROVE','PROTEST','REJECT','THREATEN','ASSAULT','COERCE','ENGAGE IN UNCONVENTIONAL MASS VIOLENCE','EXHIBIT MILITARY POSTURE','FIGHT','REDUCE RELATIONS']
-goldsteinData = goldsteinData.withColumn('if_conflict', F.when(F.col('EventRootCodeString').isin(conflict_events), True).otherwise(False))
 
 # COMMAND ----------
 
@@ -85,22 +78,6 @@ print((goldsteinDataNonConflict.count(), len(goldsteinDataNonConflict.columns)))
 
 # COMMAND ----------
 
-def plot_boxplot(var_list, title):
-  
-  # Add boxplot for var
-  sns.boxplot(var_list)
-
-  # Label axis 
-  plt.xlabel(title)
-  plt.ylabel('Probability Density Function')
-  plt.title('Distribution of ' + title)
-
-  # Show plot and add print mean and std sample information
-  plt.show()
-  'The sample(n=' + str(len(var_list)) + ') population mean is ' + str(round(np.mean(var_list), 2)) + ' with a standard deviation of ' + str(round(np.std(var_list), 2)) + '.'
-
-# COMMAND ----------
-
 def get_quantiles(df, col):
     quantile = df.approxQuantile([col], [0.25, 0.5, 0.75], 0)
     quantile_25 = quantile[0][0]
@@ -110,124 +87,101 @@ def get_quantiles(df, col):
     print('quantile_50: '+str(quantile_50))
     print('quantile_75: '+str(quantile_75))
 
-# COMMAND ----------
+def plot_boxplot(var_list, title):
+  sns.boxplot(var_list)
+  plt.xlabel(title)
+  plt.ylabel('Probability Density Function')
+  plt.title('Distribution of ' + title)
+  plt.show()
+  'The sample(n=' + str(len(var_list)) + ') population mean is ' + str(round(np.mean(var_list), 2)) + ' with a standard deviation of ' + str(round(np.std(var_list), 2)) + '.'
+  
+def plot_dist(df, col):
+    sample_df = df.select(col).sample(False, 0.5, 42)
+    pandas_df = sample_df.toPandas()
+    sns.distplot(pandas_df)
+    plt.xlabel(col) 
+    plt.show()
 
-# DBTITLE 1,Calculate Empirical Cumulative Distribution Function (ECDF)
-# create edcf function
 def ecdf(data):
     """Compute ECDF for a one-dimensional array of measurements."""
     x = np.sort(data)
     y = np.arange(1, len(data)+1) / len(data)
     return x, y
 
-# COMMAND ----------
-
-# DBTITLE 1,Plot ECDF
-def plot_ecdf(vals_list, title):
-  
-      # create theoretical dataset with Normal Distribution 
+def plot_ecdf(vals_list, title): 
       cdf_mean = np.mean(vals_list)
       cdf_std = np.std(vals_list)
-
-      # Simulate a random sample with the same distribution and size of 1,000,000
       cdf_samples = np.random.normal(cdf_mean, cdf_std, size=1000000)
-
-      # Compute the CDFs
       x_sample, y_sample = ecdf(vals_list)
       x_norm, y_norm = ecdf(cdf_samples)
-
-      # Plot both ECDFs on same the same figure
       fig = plt.plot(x_sample, y_sample, marker='.', linestyle='none', alpha=0.5)
       fig = plt.plot(x_norm, y_norm, marker='.', linestyle='none', alpha=0.5)
-
-      # Label figure
       plt.xlabel(title)
       fig = plt.ylabel('CDF')
       fig = plt.legend(('Sample Population', 'Theoretical Norm'), loc='lower right')
       fig = plt.title('Variable ECDF Distribution Compared to Statistical Norm')
-
-      # Save plots
       plt.show()
 
 # COMMAND ----------
 
-def plot_dist(df, col):
+def eda_funcs(df, country, col, conflict=True): 
   
-    # Plot distribution of a features
-    # Select a single column and sample and convert to pandas
-    sample_df = df.select(col).sample(False, 0.5, 42)
-    pandas_df = sample_df.toPandas()
-
-    # Plot distribution of pandas_df and display plot
-    sns.distplot(pandas_df)
-    plt.xlabel(col) 
-    plt.show()
-
-# COMMAND ----------
-
-def conflict_eda_funcs(col): 
+  if conflict == True:
+      name = 'Conflict'
+      df1 = df.filter((F.col('ActionGeo_FullName') == country) & (F.col('if_conflict') == True))
+      list_vals = df.select(col).rdd.flatMap(lambda x: x).collect()
+  else:
+      name = 'NonConflict'  
+      df1 = df.filter((F.col('ActionGeo_FullName') == country) & (F.col('if_conflict') != True))
+      list_vals = df.select(col).rdd.flatMap(lambda x: x).collect()
   
-  # get lists
-  list_conflict = goldsteinDataConflict.select(col).rdd.flatMap(lambda x: x).collect()
-  
-  # get quantiles
-  print('Get Conflict Quantiles for ' + col)
-  get_quantiles(goldsteinDataConflict, col)
-  plot_boxplot(list_conflict, col)
-  
-  # plot dist
-  plot_dist(goldsteinDataConflict, col)
-  
-  # plot ecdf
-  plot_ecdf(list_conflict, 'CONFLICT ' + col)
-  
-  return list_conflict
-
-# COMMAND ----------
-
-def nonconflict_eda_funcs(col): 
-  
-  # get lists
-  list_not = goldsteinDataNonConflict.select(col).rdd.flatMap(lambda x: x).collect()
-  
-  # get quantiles
-  print('Get Non-Conflict Quantiles for ' + col)
-  get_quantiles(goldsteinDataNonConflict, col)
-  plot_boxplot(list_not, col)
-  
-  # plot dist
-  plot_dist(goldsteinDataNonConflict, col)
- 
-  # plot ecdf
-  plot_ecdf(list_not, 'NON-CONFLICT ' + col)
-  
-  return list_not
+  print('Get ' + name + ' Quantiles for ' + col)
+  get_quantiles(df1, col)
+  plot_boxplot(list_vals, col)
+  plot_dist(df1, col)
+  plot_ecdf(list_vals,  name + ' ' +  col)
+  return list_vals
 
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ### GRV
+# MAGIC ### Compare Raw, Average, and Weighted Average of GoldsteinReportValue
 
 # COMMAND ----------
 
-grv_conflict = conflict_eda_funcs('GoldsteinReportValue')
-
-# COMMAND ----------
-
-grv_nonconflict = nonconflict_eda_funcs('GoldsteinReportValue')
+AFG = goldsteinData.filter(F.col('ActionGeo_FullName') == 'Afghanistan').select('GoldsteinReportValue', 'wGRA_1d', 'wGRA_60d').toPandas()
+sns.pairplot(AFG)
 
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ### Weighted GRA 3D
+# MAGIC ### GRV Weighted Average, 1D
 
 # COMMAND ----------
 
-weightedGRA_3d_conflict = conflict_eda_funcs('weightedGRA_3d')
+# MAGIC %md
+# MAGIC Afghanistan
 
 # COMMAND ----------
 
- weightedGRA_3d_nonconflict = nonconflict_eda_funcs('weightedGRA_3d')
+afg_grv_conflict = eda_funcs(df=goldsteinData, country='Afghanistan', col='wGRA_1d', conflict=True)
+
+# COMMAND ----------
+
+afg_grv_nonconflict = eda_funcs(df=goldsteinData, country='Afghanistan', col='wGRA_1d', conflict=False)
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC Somalia
+
+# COMMAND ----------
+
+som_grv_conflict = eda_funcs(df=goldsteinData, country='Somalia', col='wGRA_1d', conflict=True)
+
+# COMMAND ----------
+
+som_grv_nonconflict = eda_funcs(df=goldsteinData, country='Somalia', col='wGRA_1d', conflict=False)
 
 # COMMAND ----------
 
@@ -236,19 +190,36 @@ weightedGRA_3d_conflict = conflict_eda_funcs('weightedGRA_3d')
 
 # COMMAND ----------
 
-weightedGRA_60d_conflict = conflict_eda_funcs('weightedGRA_60d')
+# MAGIC %md
+# MAGIC Afghanistan
 
 # COMMAND ----------
 
-weightedGRA_60d_nonconflict = nonconflict_eda_funcs('weightedGRA_60d')
+afg_grv60d_conflict = eda_funcs(df=goldsteinData, country='Afghanistan', col='wGRA_60d', conflict=True)
+
+# COMMAND ----------
+
+afg_grv60d_nonconflict = eda_funcs(df=goldsteinData, country='Afghanistan', col='wGRA_60d', conflict=False)
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC Somalia
+
+# COMMAND ----------
+
+som_grv60d_nonconflict = eda_funcs(df=goldsteinData, country='Somalia', col='wGRA_60d', conflict=False)
+
+# COMMAND ----------
+
+som_grv60d_conflict = eda_funcs(df=goldsteinData, country='Somalia', col='wGRA_60d', conflict=True)
 
 # COMMAND ----------
 
 # MAGIC %md
 # MAGIC 
 # MAGIC #### Initial Conclusion:
-# MAGIC All versions of the GoldsteinReportValue (Daily and Rolling Averages) in both Conflict and Non-Conflict events seems to be *loosely* normally distribution. As mentioned earlier, the Central Limit Theorem (CLT) states that, in many situations, when independent random variables are added, their properly normalized sum tends toward a normal distribution (informally a bell curve) even if the original variables themselves are not normally distributed. More exploration needs to be performed in order to determine if this is sufficient for the purpose of the alert system, or if, like the EventReportValue, a non-parametirc statistics approach would be more accurate.
-# MAGIC - [Non-Parametric Statistics](http://erecursos.uacj.mx/bitstream/handle/20.500.11961/2064/Gibbons%2C%202003.pdf?sequence=14&isAllowed=y)
+# MAGIC All versions of the GoldsteinReportValue (Daily and Rolling Averages) in both Conflict and Non-Conflict events seems to be *generally* normally distribution. As mentioned earlier, the Central Limit Theorem (CLT) states that, in many situations, when independent random variables are added, their properly normalized sum tends toward a normal distribution (informally a bell curve) even if the original variables themselves are not normally distributed. More exploration needs to be performed in order to determine if this is sufficient for the purpose of the alert system, or if, like the EventReportValue, a non-parametirc statistics approach would be more accurate.
 
 # COMMAND ----------
 
