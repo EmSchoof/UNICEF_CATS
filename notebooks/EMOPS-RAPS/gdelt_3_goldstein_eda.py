@@ -102,6 +102,16 @@ def plot_dist(df, col):
     plt.xlabel(col) 
     plt.show()
 
+def normal_dist_proof(vars_list, title):
+    k2, p = stats.normaltest(vars_list)
+    alpha = 0.05 # 95% confidence
+    print("p = {}".format(p))
+    print("n = " + str(len(vars_list)))
+    if p < alpha: # if norm
+      print(title + " IS normally distributed.") 
+    else:
+      print(title + " *IS NOT* normally distributed.")
+      
 def ecdf(data):
     """Compute ECDF for a one-dimensional array of measurements."""
     x = np.sort(data)
@@ -140,17 +150,8 @@ def eda_funcs(df, country, col, conflict=True):
   plot_boxplot(list_vals, col)
   plot_dist(df1, col)
   plot_ecdf(list_vals,  name + ' ' +  col)
+  normal_dist_proof(list_vals,  name + ' ' +  col)
   return list_vals
-
-# COMMAND ----------
-
-# MAGIC %md
-# MAGIC ### Compare Raw, Average, and Weighted Average of GoldsteinReportValue
-
-# COMMAND ----------
-
-AFG = goldsteinData.filter(F.col('ActionGeo_FullName') == 'Afghanistan').select('GoldsteinReportValue', 'wGRA_1d', 'wGRA_60d').toPandas()
-sns.pairplot(AFG)
 
 # COMMAND ----------
 
