@@ -55,7 +55,7 @@ preprocessedGDELT.limit(10).toPandas()
 
 # DBTITLE 1,Select Goldstein Data
 goldsteinData = preprocessedGDELT.select('ActionGeo_FullName','EventTimeDate','nArticles','avgConfidence',
-                                          'GoldsteinReportValue','wGRA_1d','wGRA_60d', 'if_conflict')
+                                          'GoldsteinReportValue','wGRA_1d','wGRA_60d','if_conflict')
 
 print((goldsteinData.count(), len(goldsteinData.columns)))
 goldsteinData.limit(2).toPandas()
@@ -139,11 +139,11 @@ def eda_funcs(df, country, col, conflict=True):
   if conflict == True:
       name = 'Conflict'
       df1 = df.filter((F.col('ActionGeo_FullName') == country) & (F.col('if_conflict') == True))
-      list_vals = df.select(col).rdd.flatMap(lambda x: x).collect()
+      list_vals = df1.select(col).rdd.flatMap(lambda x: x).collect()
   else:
       name = 'NonConflict'  
       df1 = df.filter((F.col('ActionGeo_FullName') == country) & (F.col('if_conflict') != True))
-      list_vals = df.select(col).rdd.flatMap(lambda x: x).collect()
+      list_vals = df1.select(col).rdd.flatMap(lambda x: x).collect()
   
   print('Get ' + name + ' Quantiles for ' + col)
   get_quantiles(df1, col)
@@ -224,3 +224,78 @@ som_grv60d_conflict = eda_funcs(df=goldsteinData, country='Somalia', col='wGRA_6
 
 # COMMAND ----------
 
+# MAGIC %md
+# MAGIC ### Create Dataframe to verify normal distribution per country 
+
+# COMMAND ----------
+
+def calc_normal_dist(vars_list, title):
+    k2, p = stats.normaltest(vars_list)
+    alpha = 0.05 # 95% confidence
+    print("p = {}".format(p))
+    print("n = " + str(len(vars_list)))
+    if p < alpha: # if norm
+      print(title + " IS normally distributed.") 
+    else:
+      print(title + " *IS NOT* normally distributed.")
+
+
+def normal_funcs(df, country, col, conflict=True): 
+  
+  if conflict == True:
+      name = 'Conflict'
+      df1 = df.filter((F.col('ActionGeo_FullName') == country) & (F.col('if_conflict') == True))
+      list_vals = df1.select(col).rdd.flatMap(lambda x: x).collect()
+  else:
+      name = 'NonConflict'  
+      df1 = df.filter((F.col('ActionGeo_FullName') == country) & (F.col('if_conflict') != True))
+      list_vals = df1.select(col).rdd.flatMap(lambda x: x).collect()
+  
+  normal_dist_proof(list_vals,  name + ' ' +  col)
+  return list_vals
+
+# COMMAND ----------
+
+goldsteinVerify = goldsteinData \
+                  .select('ActionGeo_FullName', 'if_conflict') \
+                  .groupBy('ActionGeo_FullName', 'if_conflict') \
+                  .count() \
+                  .drop(F.col('count')) \
+                  .dropDuplicates() \
+                  .orderBy('ActionGeo_FullName', 'if_conflict')
+goldsteinVerify.limit(10).toPandas()
+
+# COMMAND ----------
+
+goldsteinData.limit(4).toPandas()
+
+# COMMAND ----------
+
+def get_vars_list(, conflict):
+      df1 = df.filter((F.col('ActionGeo_FullName') == country) & (F.col('if_conflict') == conflict))
+      return df.select(col).rdd.flatMap(lambda x: x).collect()
+
+def get_normal_pval(vars_list):
+    k2, p = stats.normaltest(vars_list)
+    return p
+
+def if_norm(p):
+    alpha = 0.05 # 95% confidence
+    if p < alpha: # if norm
+      return True
+    else:
+      return False
+
+# Create UDF funcs
+get_pval_udf = F.udf(lambda vars: get_normal_pval(vars), FloatType())
+if_norm_udf = F.udf(lambda p: if_norm(p), BooleanType())
+
+# COMMAND ----------
+
+# create a Window, country by date
+countriesConflict_window = Window.partitionBy('ActionGeo_FullName', 'if_conflict').orderBy('EventTimeDate')
+
+# get daily distribution of articles for each Event Code string within Window
+gdeltTargetOutputPartitioned = gdeltTargetOutput.withColumn('EventReportValue', F.col('nArticles')/F.sum('nArticles').over(countriesDaily_window))
+
+goldsteinVerify = goldsteinVerify.withColumn('p_value', )
