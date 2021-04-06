@@ -21,6 +21,15 @@
 
 # COMMAND ----------
 
+from pyspark.sql import SparkSession
+
+spark = SparkSession.builder\
+        .master("local[*]")\
+        .appName('PySpark_Tutorial')\
+        .getOrCreate()
+
+# COMMAND ----------
+
 # DBTITLE 1,Import Modules
 from functools import reduce
 from itertools import chain
@@ -225,55 +234,76 @@ som_grv60d_conflict = eda_funcs(df=goldsteinData, country='Somalia', col='wGRA_6
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ### Create Dataframe to verify normal distribution per country 
+# MAGIC ### Explore Goldsetain distribution per country 
+# MAGIC [source](https://syamkakarla.medium.com/intermediate-guide-to-pyspark-pyspark-sql-functions-with-examples-7eec883b5eaa)
 
 # COMMAND ----------
 
-def calc_normal_dist(vars_list, title):
-    k2, p = stats.normaltest(vars_list)
-    alpha = 0.05 # 95% confidence
-    print("p = {}".format(p))
-    print("n = " + str(len(vars_list)))
-    if p < alpha: # if norm
-      print(title + " IS normally distributed.") 
-    else:
-      print(title + " *IS NOT* normally distributed.")
-
-
-def normal_funcs(df, country, col, conflict=True): 
-  
-  if conflict == True:
-      name = 'Conflict'
-      df1 = df.filter((F.col('ActionGeo_FullName') == country) & (F.col('if_conflict') == True))
-      list_vals = df1.select(col).rdd.flatMap(lambda x: x).collect()
-  else:
-      name = 'NonConflict'  
-      df1 = df.filter((F.col('ActionGeo_FullName') == country) & (F.col('if_conflict') != True))
-      list_vals = df1.select(col).rdd.flatMap(lambda x: x).collect()
-  
-  normal_dist_proof(list_vals,  name + ' ' +  col)
-  return list_vals
+# MAGIC %md 
+# MAGIC #### Skewness
+# MAGIC Skewness is a measure of symmetry, or more precisely, the lack of symmetry. A distribution, or data set, is symmetric if it looks the same to the left and right of the center point.
+# MAGIC 
+# MAGIC #### Kurtosis
+# MAGIC Kurtosis is a measure of whether the data are heavy-tailed or light-tailed relative to a normal distribution. That is, data sets with high kurtosis tend to have heavy tails or outliers. Data sets with low kurtosis tend to have light tails or a lack of outliers.
+# MAGIC 
+# MAGIC #### Standard Deviation
+# MAGIC Standard Deviation is a statistical measure of the dispersion of the data relative to its mean. It is calculated with the square root of the variance. A low standard deviation indicates that the values tend to be close to the mean of the dataset, while a high standard deviation indicates that the values are spread out over a wider range.
+# MAGIC 
+# MAGIC #### Variance
+# MAGIC The variance is a measure of variability. It is calculated by taking the average of squared deviations from the mean. Variance tells you the degree of spread in your data set. The more spread the data, the larger the variance is in relation to the mean.
 
 # COMMAND ----------
 
-goldsteinVerify = goldsteinData \
-                  .select('ActionGeo_FullName', 'if_conflict') \
-                  .groupBy('ActionGeo_FullName', 'if_conflict') \
-                  .count() \
-                  .drop(F.col('count')) \
-                  .dropDuplicates() \
-                  .orderBy('ActionGeo_FullName', 'if_conflict')
-goldsteinVerify.limit(10).toPandas()
+goldsteinDataPartitioned = goldsteinData.select('ActionGeo_FullName', 'if_conflict', 'wGRA_1d', 'wGRA_60d', 'nArticles') \
+                                        .groupBy('ActionGeo_FullName', 'if_conflict') \
+                                        .agg( F.skewness('wGRA_1d'),
+                                              F.kurtosis('wGRA_1d'),
+                                              F.stddev('wGRA_1d'),
+                                              F.variance('wGRA_1d'),
+                                              F.collect_list('wGRA_1d').alias('list_wGRA_1d'),
+                                              F.skewness('wGRA_60d'),
+                                              F.kurtosis('wGRA_60d'),
+                                              F.stddev('wGRA_60d'),
+                                              F.variance('wGRA_60d'),
+                                              F.collect_list('wGRA_60d').alias('list_wGRA_60d'),
+                                              F.sum('nArticles').alias('nArticles'),
+                                              F.count(F.lit(1)).alias('n_observations')
+                                        )
+
+goldsteinDataPartitioned.limit(4).toPandas()
 
 # COMMAND ----------
 
-goldsteinData.limit(4).toPandas()
+# MAGIC %md
+# MAGIC ### Test for Normal Distribution of Goldstein by Country for Conflict/Not
+# MAGIC - The **Jarque-Bera** test tests whether the sample data has the skewness and kurtosis matching a normal distribution.
+# MAGIC - Since this test only works for a large enough number of data samples (>2000) as the test statistic asymptotically has a Chi-squared distribution with 2 degrees of freedom, there will be a secondary step to verify that each sample size is sufficient.
 
 # COMMAND ----------
 
-def get_vars_list(, conflict):
-      df1 = df.filter((F.col('ActionGeo_FullName') == country) & (F.col('if_conflict') == conflict))
-      return df.select(col).rdd.flatMap(lambda x: x).collect()
+# We can now create our UDF, the returned data type is too complex for pyspark, numpy arrays are not supported by pyspark so we'll need to change it a bit:
+
+def sSumSqDif(a, data):
+    return np.sum()
+
+def sRunMinimize(data, startVal=startVal, bnds=bnds, cons=cons):
+    data = pd.DataFrame()
+    ResultByGrp = minimize(sSumSqDif, startVal, method='SLSQP',
+                       bounds=bnds, constraints = cons, args=(data))
+    return ResultByGrp.x.tolist()
+
+sRunMinimize_udf = lambda startVal, bnds, cons: psf.udf(
+    lambda data: sRunMinimize(data, startVal, bnds, cons), 
+    ArrayType(DoubleType())
+)
+
+
+Results = sdf_agg.select(
+    "grpVar", 
+    sRunMinimize_udf(startVal, bnds, cons)("data").alias("res")
+)
+
+# COMMAND ----------
 
 def get_normal_pval(vars_list):
     k2, p = stats.normaltest(vars_list)
@@ -287,15 +317,9 @@ def if_norm(p):
       return False
 
 # Create UDF funcs
-get_pval_udf = F.udf(lambda vars: get_normal_pval(vars), FloatType())
+get_pval_udf = F.udf(lambda vars: get_normal_pval(vars), ArrayType(FloatType()))
 if_norm_udf = F.udf(lambda p: if_norm(p), BooleanType())
 
 # COMMAND ----------
 
-# create a Window, country by date
-countriesConflict_window = Window.partitionBy('ActionGeo_FullName', 'if_conflict').orderBy('EventTimeDate')
-
-# get daily distribution of articles for each Event Code string within Window
-gdeltTargetOutputPartitioned = gdeltTargetOutput.withColumn('EventReportValue', F.col('nArticles')/F.sum('nArticles').over(countriesDaily_window))
-
-goldsteinVerify = goldsteinVerify.withColumn('p_value', )
+goldsteinData.filter(F.col('ActionGeo_FullName') == 'Palmyra Atoll').limit(20).toPandas()
