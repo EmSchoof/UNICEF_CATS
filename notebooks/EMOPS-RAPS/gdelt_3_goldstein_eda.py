@@ -234,23 +234,19 @@ som_grv60d_conflict = eda_funcs(df=goldsteinData, country='Somalia', col='wGRA_6
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ### Explore Goldsetain distribution per country 
+# MAGIC ### Explore Goldstein distribution per country 
 # MAGIC [source](https://syamkakarla.medium.com/intermediate-guide-to-pyspark-pyspark-sql-functions-with-examples-7eec883b5eaa)
 
 # COMMAND ----------
 
 # MAGIC %md 
-# MAGIC #### Skewness
-# MAGIC Skewness is a measure of symmetry, or more precisely, the lack of symmetry. A distribution, or data set, is symmetric if it looks the same to the left and right of the center point.
+# MAGIC **Skewness**: a measure of symmetry, or more precisely, the lack of symmetry. A distribution, or data set, is symmetric if it looks the same to the left and right of the center point.
 # MAGIC 
-# MAGIC #### Kurtosis
-# MAGIC Kurtosis is a measure of whether the data are heavy-tailed or light-tailed relative to a normal distribution. That is, data sets with high kurtosis tend to have heavy tails or outliers. Data sets with low kurtosis tend to have light tails or a lack of outliers.
+# MAGIC **Kurtosis**: a measure of whether the data are heavy-tailed or light-tailed relative to a normal distribution. That is, data sets with high kurtosis tend to have heavy tails or outliers. Data sets with low kurtosis tend to have light tails or a lack of outliers.
 # MAGIC 
-# MAGIC #### Standard Deviation
-# MAGIC Standard Deviation is a statistical measure of the dispersion of the data relative to its mean. It is calculated with the square root of the variance. A low standard deviation indicates that the values tend to be close to the mean of the dataset, while a high standard deviation indicates that the values are spread out over a wider range.
+# MAGIC **Standard Deviation**: a statistical measure of the dispersion of the data relative to its mean. It is calculated with the square root of the variance. A low standard deviation indicates that the values tend to be close to the mean of the dataset, while a high standard deviation indicates that the values are spread out over a wider range.
 # MAGIC 
-# MAGIC #### Variance
-# MAGIC The variance is a measure of variability. It is calculated by taking the average of squared deviations from the mean. Variance tells you the degree of spread in your data set. The more spread the data, the larger the variance is in relation to the mean.
+# MAGIC **Variance**: a measure of variability. It is calculated by taking the average of squared deviations from the mean. Variance tells you the degree of spread in your data set. The more spread the data, the larger the variance is in relation to the mean.
 
 # COMMAND ----------
 
@@ -281,45 +277,32 @@ goldsteinDataPartitioned.limit(4).toPandas()
 
 # COMMAND ----------
 
-# We can now create our UDF, the returned data type is too complex for pyspark, numpy arrays are not supported by pyspark so we'll need to change it a bit:
-
-def sSumSqDif(a, data):
-    return np.sum()
-
-def sRunMinimize(data, startVal=startVal, bnds=bnds, cons=cons):
-    data = pd.DataFrame()
-    ResultByGrp = minimize(sSumSqDif, startVal, method='SLSQP',
-                       bounds=bnds, constraints = cons, args=(data))
-    return ResultByGrp.x.tolist()
-
-sRunMinimize_udf = lambda startVal, bnds, cons: psf.udf(
-    lambda data: sRunMinimize(data, startVal, bnds, cons), 
-    ArrayType(DoubleType())
-)
-
-
-Results = sdf_agg.select(
-    "grpVar", 
-    sRunMinimize_udf(startVal, bnds, cons)("data").alias("res")
-)
-
-# COMMAND ----------
-
 def get_normal_pval(vars_list):
-    k2, p = stats.normaltest(vars_list)
-    return p
+    if len(vars_list) >= 8:
+      k2, p = stats.normaltest(vars_list)
+      return float(p)
+    else:
+      return float('nan')
 
 def if_norm(p):
     alpha = 0.05 # 95% confidence
     if p < alpha: # if norm
       return True
+    elif np.isnan(p) == True:
+      return False
     else:
       return False
 
 # Create UDF funcs
-get_pval_udf = F.udf(lambda vars: get_normal_pval(vars), ArrayType(FloatType()))
+get_pval_udf = F.udf(lambda vars: get_normal_pval(vars), FloatType())
 if_norm_udf = F.udf(lambda p: if_norm(p), BooleanType())
 
 # COMMAND ----------
 
-goldsteinData.filter(F.col('ActionGeo_FullName') == 'Palmyra Atoll').limit(20).toPandas()
+# get p-value and define normalcy
+goldsteinDataPartitioned = goldsteinDataPartitioned.withColumn('p_value', get_pval_udf(goldsteinDataPartitioned.list_wGRA_1d))
+goldsteinDataPartitioned = goldsteinDataPartitioned.withColumn('if_normal', if_norm_udf(goldsteinDataPartitioned.p_value))
+goldsteinDataPartitioned.limit(10).toPandas()
+
+# COMMAND ----------
+
