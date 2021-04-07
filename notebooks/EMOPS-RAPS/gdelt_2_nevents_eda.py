@@ -18,14 +18,19 @@
 # MAGIC when the *Event Report Value* for a given PA2 (*60 DAYS*) is <strike>one standard deviation</strike>  above ERA2*
 # MAGIC 
 # MAGIC 
+# MAGIC *New Methodology*
+# MAGIC - (1.0) Compute three day average for all the data values you have across all years. 
+# MAGIC - (1.a) Your result will be X = [x1, x2, x3, ... xn]
+# MAGIC - (2.0) Set a threshhold parameter z. // benchmark special parameter (needs to be established per country?) come up with a "Ground Truth" value
+# MAGIC - (3.0) For each value in X, compare with z 
+# MAGIC 
+# MAGIC *Execution of Methodology*
+# MAGIC - 1 - [create a list of 3 day moving averages from today - 365 days] // compare this list with defined 'z' anomalist behavior to the current 3 day average per EventRootCode
+# MAGIC - 2 - [create a list of 60 day moving averages from today - 730 days] // compare this list with defined 'z' anomalist behavior to the current 60 day average per EventRootCode
+# MAGIC 
+# MAGIC 
 # MAGIC Sources:
 # MAGIC - (1) [Moving Averaging with Apache Spark](https://www.linkedin.com/pulse/time-series-moving-average-apache-pyspark-laurent-weichberger/)
-
-# COMMAND ----------
-
-# MAGIC %md
-# MAGIC 
-# MAGIC For the sake of data storage, the *Weighted Average* of the Target Variables will be assessed, since the average numerical value per global event id per country per date was created in the previous preprocessing process.
 
 # COMMAND ----------
 
@@ -34,6 +39,7 @@ from functools import reduce
 from itertools import chain
 import numpy as np
 import matplotlib.pyplot as plt
+import pandas as pd
 from pyspark.mllib.stat import Statistics
 from pyspark.sql import DataFrame
 import pyspark.sql.functions as F
@@ -62,9 +68,7 @@ preprocessedGDELT.limit(10).toPandas()
 # COMMAND ----------
 
 # DBTITLE 1,Select Events Data
-eventsData = preprocessedGDELT.select('ActionGeo_FullName','EventTimeDate','EventRootCodeString','nArticles','avgConfidence',
-                                          'EventReportValue','weightedERA_3d','weightedERA_60d')
-
+eventsData = preprocessedGDELT.select('ActionGeo_FullName','EventTimeDate','EventRootCodeString','nArticles','avgConfidence','EventReportValue','wERA_3d','wERA_60d')
 print((eventsData.count(), len(eventsData.columns)))
 eventsData.limit(2).toPandas()
 
@@ -77,8 +81,13 @@ eventsData = eventsData.withColumn('if_conflict', F.when(F.col('EventRootCodeStr
 
 # COMMAND ----------
 
-# It's a best practice to sample data from your Spark df into pandas
-sub_eventsData = eventsData.sample(withReplacement=False, fraction=0.5, seed=42)
+eventsData.limit(10).toPandas()
+
+# COMMAND ----------
+
+# It's a best practice to sample data from your Spark df into pandas #.sample(withReplacement=False, fraction=0.5, seed=42)
+explore_countries = ['Afghanistan','Myanmar','Somalia','Guinea']
+sub_eventsData = eventsData.filter(F.col('ActionGeo_FullName').isin(explore_countries))
 
 # separate into conflict vs not 
 eventsDataConflict = sub_eventsData.filter(F.col('if_conflict') == True)
@@ -93,22 +102,7 @@ print((eventsDataNonConflict.count(), len(eventsDataNonConflict.columns)))
 
 # COMMAND ----------
 
-def plot_boxplot(var_list, title):
-  
-  # Add boxplot for var
-  sns.boxplot(var_list)
-
-  # Label axis 
-  plt.xlabel(title)
-  plt.ylabel('Probability Density Function')
-  plt.title('Distribution of ' + title)
-
-  # Show plot and add print mean and std sample information
-  plt.show()
-  'The sample(n=' + str(len(var_list)) + ') population mean is ' + str(round(np.mean(var_list), 2)) + ' with a standard deviation of ' + str(round(np.std(var_list), 2)) + '.'
-
-# COMMAND ----------
-
+# DBTITLE 0,Calculate Empirical Cumulative Distribution Function (ECDF)
 def get_quantiles(df, col):
     quantile = df.approxQuantile([col], [0.25, 0.5, 0.75], 0)
     quantile_25 = quantile[0][0]
@@ -118,98 +112,74 @@ def get_quantiles(df, col):
     print('quantile_50: '+str(quantile_50))
     print('quantile_75: '+str(quantile_75))
 
-# COMMAND ----------
+def plot_boxplot(var_list, title):
+  sns.boxplot(var_list)
+  plt.xlabel(title)
+  plt.ylabel('Probability Density Function')
+  plt.title('Distribution of ' + title)
+  plt.show()
+  'The sample(n=' + str(len(var_list)) + ') population mean is ' + str(round(np.mean(var_list), 2)) + ' with a standard deviation of ' + str(round(np.std(var_list), 2)) + '.'
+  
+def plot_dist(df, col):
+    sample_df = df.select(col).sample(False, 0.5, 42)
+    pandas_df = sample_df.toPandas()
+    sns.distplot(pandas_df)
+    plt.xlabel(col) 
+    plt.show()
 
-# DBTITLE 1,Calculate Empirical Cumulative Distribution Function (ECDF)
-# create edcf function
 def ecdf(data):
     """Compute ECDF for a one-dimensional array of measurements."""
     x = np.sort(data)
     y = np.arange(1, len(data)+1) / len(data)
     return x, y
 
-# COMMAND ----------
-
-# DBTITLE 1,Plot ECDF
-def plot_ecdf(vals_list, title):
-  
-      # create theoretical dataset with Normal Distribution 
+def plot_ecdf(vals_list, title): 
       cdf_mean = np.mean(vals_list)
       cdf_std = np.std(vals_list)
-
-      # Simulate a random sample with the same distribution and size of 1,000,000
       cdf_samples = np.random.normal(cdf_mean, cdf_std, size=1000000)
-
-      # Compute the CDFs
       x_sample, y_sample = ecdf(vals_list)
       x_norm, y_norm = ecdf(cdf_samples)
-
-      # Plot both ECDFs on same the same figure
       fig = plt.plot(x_sample, y_sample, marker='.', linestyle='none', alpha=0.5)
       fig = plt.plot(x_norm, y_norm, marker='.', linestyle='none', alpha=0.5)
-
-      # Label figure
       plt.xlabel(title)
       fig = plt.ylabel('CDF')
       fig = plt.legend(('Sample Population', 'Theoretical Norm'), loc='lower right')
       fig = plt.title('Variable ECDF Distribution Compared to Statistical Norm')
-
-      # Save plots
       plt.show()
 
 # COMMAND ----------
 
-def plot_dist(df, col):
+def eda_funcs(df, country, col, conflict=True): 
   
-    # Plot distribution of a features
-    # Select a single column and sample and convert to pandas
-    sample_df = df.select(col).sample(False, 0.5, 42)
-    pandas_df = sample_df.toPandas()
-
-    # Plot distribution of pandas_df and display plot
-    sns.distplot(pandas_df)
-    plt.xlabel(col) 
-    plt.show()
-
-# COMMAND ----------
-
-def conflict_eda_funcs(col): 
+  if conflict == True:
+      name = 'Conflict'
+      df1 = df.filter((F.col('ActionGeo_FullName') == country) & (F.col('if_conflict') == True))
+      list_vals = df.select(col).rdd.flatMap(lambda x: x).collect()
+  else:
+      name = 'NonConflict'  
+      df1 = df.filter((F.col('ActionGeo_FullName') == country) & (F.col('if_conflict') != True))
+      list_vals = df.select(col).rdd.flatMap(lambda x: x).collect()
   
-  # get lists
-  list_conflict = eventsData.select(col).rdd.flatMap(lambda x: x).collect()
-  
-  # get quantiles
-  print('Get Conflict Quantiles for ' + col)
-  get_quantiles(eventsDataConflict, col)
-  plot_boxplot(list_conflict, col)
-  
-  # plot dist
-  plot_dist(eventsDataConflict, col)
-  
-  # plot ecdf
-  plot_ecdf(list_conflict, 'CONFLICT ' + col)
-  
-  return list_conflict
+  print('Get ' + name + ' Quantiles for ' + col)
+  get_quantiles(df1, col)
+  plot_boxplot(list_vals, col)
+  plot_dist(df1, col)
+  plot_ecdf(list_vals,  name + ' ' +  col)
+  return list_vals
 
 # COMMAND ----------
 
-def nonconflict_eda_funcs(col): 
-  
-  # get lists
-  list_not = eventsDataNonConflict.select(col).rdd.flatMap(lambda x: x).collect()
-  
-  # get quantiles
-  print('Get Non-Conflict Quantiles for ' + col)
-  get_quantiles(eventsDataNonConflict, col)
-  plot_boxplot(list_not, col)
-  
-  # plot dist
-  plot_dist(eventsDataNonConflict, col)
- 
-  # plot ecdf
-  plot_ecdf(list_not, 'NON-CONFLICT ' + col)
-  
-  return list_not
+# MAGIC %md
+# MAGIC ### Compare Raw, Average, and Weighted Average of EventReportValue
+
+# COMMAND ----------
+
+AFG = eventsData.filter(F.col('ActionGeo_FullName') == 'Afghanistan').select('EventReportValue', 'wERA_3d', 'wERA_60d').toPandas()
+sns.pairplot(AFG)
+
+# COMMAND ----------
+
+event_codes = ['MAKE PUBLIC STATEMENT', 'APPEAL', 'EXPRESS INTENT TO COOPERATE', 'CONSULT', 'ENGAGE IN DIPLOMATIC COOPERATION', 'ENGAGE IN MATERIAL COOPERATION', 'PROVIDE AID', 'YIELD', 'INVESTIGATE', 'DEMAND', 'DISAPPROVE', 'REJECT', 'THREATEN', 'PROTEST', 'EXHIBIT MILITARY POSTURE', 'REDUCE RELATIONS', 'COERCE', 'ASSAULT', 'FIGHT', 'ENGAGE IN UNCONVENTIONAL MASS VIOLENCE']
 
 # COMMAND ----------
 
@@ -218,37 +188,52 @@ def nonconflict_eda_funcs(col):
 
 # COMMAND ----------
 
-erv_conflict = conflict_eda_funcs('EventReportValue')
+afg_erv_conflict = eda_funcs(df=eventsData, country='Afghanistan', col='EventReportValue', conflict=True) #eventcode='',
 
 # COMMAND ----------
 
-erv_nonconflict = nonconflict_eda_funcs('EventReportValue')
+afg_erv_nonconflict = eda_funcs(df=eventsData, country='Afghanistan', col='EventReportValue', conflict=False)
 
 # COMMAND ----------
 
-# MAGIC %md
-# MAGIC ### Weighted ERA 3D
-
-# COMMAND ----------
-
-weightedERA_3d_conflict = conflict_eda_funcs('weightedERA_3d')
-
-# COMMAND ----------
-
- weightedERA_3d_nonconflict = nonconflict_eda_funcs('weightedERA_3d')
+# ERV_3d: Apply Kruskal-Wallis H-test
+stats.kruskal(afg_erv_conflict, afg_erv_nonconflict)
 
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ### Weighted ERA 60D
+# MAGIC ### wERA 3D
 
 # COMMAND ----------
 
-weightedERA_60d_conflict = conflict_eda_funcs('weightedERA_60d')
+afg_erv3d_conflict = eda_funcs(df=eventsData, country='Afghanistan', col='wERA_3d', conflict=True)
 
 # COMMAND ----------
 
-weightedERA_60d_nonconflict = nonconflict_eda_funcs('weightedERA_60d')
+afg_erv3d_nonconflict = eda_funcs(df=eventsData, country='Afghanistan', col='wERA_3d', conflict=False)
+
+# COMMAND ----------
+
+# ERV_3d: Apply Kruskal-Wallis H-test
+stats.kruskal(afg_erv3d_conflict, afg_erv3d_nonconflict)
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC ### wERA 60D
+
+# COMMAND ----------
+
+afg_erv60d_conflict = eda_funcs(df=eventsData, country='Afghanistan', col='wERA_60d', conflict=True)
+
+# COMMAND ----------
+
+afg_erv60d_nonconflict = eda_funcs(df=eventsData, country='Afghanistan', col='wERA_60d', conflict=False)
+
+# COMMAND ----------
+
+# ERV_3d: Apply Kruskal-Wallis H-test
+stats.kruskal(afg_erv60d_conflict, afg_erv60d_nonconflict)
 
 # COMMAND ----------
 
@@ -260,22 +245,24 @@ weightedERA_60d_nonconflict = nonconflict_eda_funcs('weightedERA_60d')
 # MAGIC - [Non-Parametric Statistics](http://erecursos.uacj.mx/bitstream/handle/20.500.11961/2064/Gibbons%2C%202003.pdf?sequence=14&isAllowed=y)
 # MAGIC 
 # MAGIC 
-# MAGIC As mentioned above, the Kruskal-Wallis H-test is the non-parametric version of ANOVA tests, which the null hypothesis that the population median of all of the groups are equal. The test works on 2 or more independent samples, which may have different sizes, and makes the assumption that H has a chi square distribution. Since the rejection the null hypothesis does not indicate which of the groups differs, a post hoc comparisons between the groups is required to determine which groups are different. [source](https://docs.scipy.org/doc/scipy/reference/generated/scipy.stats.kruskal.html)
-
-# COMMAND ----------
-
-# ERV
-stats.kruskal(erv_conflict, erv_nonconflict)
-
-# COMMAND ----------
-
-# ERA_3d
-stats.kruskal(weightedERA_3d_conflict, weightedERA_3d_nonconflict)
-
-# COMMAND ----------
-
-# ERA_60d
-stats.kruskal(weightedERA_60d_conflict, weightedERA_60d_nonconflict)
-
-# COMMAND ----------
-
+# MAGIC 
+# MAGIC 
+# MAGIC (A) As mentioned above, the Kruskal-Wallis H-test is the non-parametric version of ANOVA tests, which the null hypothesis that the population median of all of the groups are equal. The test works on 2 or more independent samples, which may have different sizes, and makes the assumption that H has a chi square distribution. Since the rejection the null hypothesis does not indicate which of the groups differs, a post hoc comparisons between the groups is required to determine which groups are different. [source](https://docs.scipy.org/doc/scipy/reference/generated/scipy.stats.kruskal.html)
+# MAGIC 
+# MAGIC 
+# MAGIC #### Assumptions for Kruskal-Wallis H-test:
+# MAGIC - *Assumption #1*: The dependent variable is a continuous or ordinal variable
+# MAGIC   - EventReportValue et.al is a percentage, which is a type of continuous variable measured between 0 and 1
+# MAGIC - *Assumption #2*: The independent variable should consist of 2 or more categorical, independent groups.
+# MAGIC   - When grouping at the country level, there are 4 categorical groups for QuadClass, which can be subdivided in to 20 independent categories of EventRootCodes. 
+# MAGIC   - However, for the initial iteration of this analysis, all data will be grouped into 2 categorical, independent groups: Conflict vs Non-Conflict.
+# MAGIC - *Assumption #3*: There is independence of observations, which means that there is no relationship between the observations in each group or between the groups themselves.
+# MAGIC   - When grouping at the country level, each global event and respective calculated EventReportValue is entirely independents of other entries.
+# MAGIC - *Assumption #4*: The distribution of each dependent variable categorical group has been explored; if the distributions are similar the median will be assessed, else the mean.
+# MAGIC   - As discussed, above, all versions of the EventReportValue (Daily and Rolling Averages) in both Conflict and Non-Conflict events have a skewed-right distribution.
+# MAGIC 
+# MAGIC [source](https://statistics.laerd.com/spss-tutorials/kruskal-wallis-h-test-using-spss-statistics.php)
+# MAGIC 
+# MAGIC 
+# MAGIC 
+# MAGIC (B) Another option is to transform the data in order create a normally-distributed variable. Since this variable is a percentage, one post suggested transforming the data via the arcsine method [source](https://www.researchgate.net/post/Should_I_do_log_transform_percentage_data_of_cell_subsets_measured_with_FACS/54b682a5d2fd645a788b4686/citation/download). Arcsine, or angular, transformation is the preferred variable transformation for multivariant problems where both 0% and 100% are viable options. [source](http://strata.uga.edu/8370/rtips/proportions.html#:~:text=The%20arcsine%20transformation%20(also%20called,square%20root%20of%20the%20proportion.&text=Multiplying%20by%20two%20makes%20the,scale%20stop%20at%20pi%2F2.)
