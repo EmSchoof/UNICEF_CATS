@@ -299,11 +299,38 @@ if_norm_udf = F.udf(lambda p: if_norm(p), BooleanType())
 
 # COMMAND ----------
 
-# get p-value and define normalcy
-goldsteinDataPartitioned = goldsteinDataPartitioned.withColumn('p_value', get_pval_udf(goldsteinDataPartitioned.list_wGRA_1d))
-goldsteinDataPartitioned = goldsteinDataPartitioned.withColumn('if_normal', if_norm_udf(goldsteinDataPartitioned.p_value))
-goldsteinDataPartitioned.limit(10).toPandas()
+# MAGIC %md 
+# MAGIC ### Assess Variables without distinguishing between if_conflict 
 
 # COMMAND ----------
 
-goldsteinDataPartitioned.select('ActionGeo_FullName', 'if_conflict', 'if_normal').filter(F.col('if_normal') == False).show()
+goldsteinDataAll = goldsteinData.select('ActionGeo_FullName', 'wGRA_1d', 'wGRA_60d', 'nArticles') \
+                                        .groupBy('ActionGeo_FullName') \
+                                        .agg( F.skewness('wGRA_1d'),
+                                              F.kurtosis('wGRA_1d'),
+                                              F.stddev('wGRA_1d'),
+                                              F.variance('wGRA_1d'),
+                                              F.collect_list('wGRA_1d').alias('list_wGRA_1d'),
+                                              F.skewness('wGRA_60d'),
+                                              F.kurtosis('wGRA_60d'),
+                                              F.stddev('wGRA_60d'),
+                                              F.variance('wGRA_60d'),
+                                              F.collect_list('wGRA_60d').alias('list_wGRA_60d'),
+                                              F.sum('nArticles').alias('nArticles'),
+                                              F.count(F.lit(1)).alias('n_observations')
+                                        )
+
+# get p-value and define normalcy
+goldsteinDataAll = goldsteinDataAll.withColumn('p_value_1d', get_pval_udf(goldsteinDataAll.list_wGRA_1d))
+goldsteinDataAll = goldsteinDataAll.withColumn('if_normal_1d', if_norm_udf(goldsteinDataAll.p_value_1d))
+goldsteinDataAll = goldsteinDataAll.withColumn('p_value_60d', get_pval_udf(goldsteinDataAll.list_wGRA_60d))
+goldsteinDataAll = goldsteinDataAll.withColumn('if_normal_60d', if_norm_udf(goldsteinDataAll.p_value_60d))
+goldsteinDataAll.limit(5).toPandas()
+
+# COMMAND ----------
+
+goldsteinDataAll.select('ActionGeo_FullName','n_observations', 'if_normal_1d').filter(F.col('if_normal_1d') == False).show()
+
+# COMMAND ----------
+
+goldsteinDataAll.select('ActionGeo_FullName','n_observations','if_normal_60d').filter(F.col('if_normal_60d') == False).show()
