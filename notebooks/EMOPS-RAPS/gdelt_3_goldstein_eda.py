@@ -306,3 +306,4 @@ goldsteinDataPartitioned.limit(10).toPandas()
 
 # COMMAND ----------
 
+goldsteinDataPartitioned.select('ActionGeo_FullName', 'if_conflict', 'if_normal').filter(F.col('if_normal') == False).show()
