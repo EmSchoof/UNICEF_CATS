@@ -80,6 +80,12 @@ eventsData.limit(2).toPandas()
 
 # COMMAND ----------
 
+datesDF = eventsData.select('EventTimeDate')
+min_date, max_date = datesDF.select(F.min('EventTimeDate'),F.max('EventTimeDate')).first()
+min_date, max_date
+
+# COMMAND ----------
+
 # DBTITLE 1,Explore Values in Conflict vs Not Situations
 # create conflict column
 conflict_events = ['DEMAND','DISAPPROVE','PROTEST','REJECT','THREATEN','ASSAULT','COERCE','ENGAGE IN UNCONVENTIONAL MASS VIOLENCE','EXHIBIT MILITARY POSTURE','FIGHT','REDUCE RELATIONS']
