@@ -17,18 +17,6 @@
 # MAGIC -	Event trend alert: 
 # MAGIC when the *Event Report Value* for a given PA2 (*60 DAYS*) is <strike>one standard deviation</strike>  above ERA2*
 # MAGIC 
-# MAGIC 
-# MAGIC *New Methodology*
-# MAGIC - (1.0) Compute three day average for all the data values you have across all years. 
-# MAGIC - (1.a) Your result will be X = [x1, x2, x3, ... xn]
-# MAGIC - (2.0) Set a threshhold parameter z. // benchmark special parameter (needs to be established per country?) come up with a "Ground Truth" value
-# MAGIC - (3.0) For each value in X, compare with z 
-# MAGIC 
-# MAGIC *Execution of Methodology*
-# MAGIC - 1 - [create a list of 3 day moving averages from today - 365 days] // compare this list with defined 'z' anomalist behavior to the current 3 day average per EventRootCode
-# MAGIC - 2 - [create a list of 60 day moving averages from today - 730 days] // compare this list with defined 'z' anomalist behavior to the current 60 day average per EventRootCode
-# MAGIC 
-# MAGIC 
 # MAGIC Sources:
 # MAGIC - (1) [Moving Averaging with Apache Spark](https://www.linkedin.com/pulse/time-series-moving-average-apache-pyspark-laurent-weichberger/)
 # MAGIC 
