@@ -4,6 +4,7 @@
 # MAGIC ### Periods of Analysis
 # MAGIC - Period of Analysis 1 (PA1): 3 days
 # MAGIC - Period of Analysis 2 (PA2): 60 days 
+# MAGIC - Period of Analysis 3 (PA2): 1 days 
 # MAGIC 
 # MAGIC ### Premise of Task
 # MAGIC - Anomaly detection of target variables
@@ -94,7 +95,7 @@ preprocessedGDELT = spark.read.format("csv") \
 preprocessedGDELT = preprocessedGDELT.withColumn('EventTimeDate', F.col('EventTimeDate').cast('date'))
 print((preprocessedGDELT.count(), len(preprocessedGDELT.columns)))
 preprocessedGDELT.agg(F.countDistinct(F.col("GLOBALEVENTID")).alias("nEvents")).show()
-preprocessedGDELT.limit(2).toPandas()
+preprocessedGDELT.limit(10).toPandas()
 
 # COMMAND ----------
 
@@ -199,29 +200,30 @@ plt.plot(sumERV.select('sum(EventReportValue)').toPandas())
 # COMMAND ----------
 
 # DBTITLE 0,*Viable Pandas Code but DO NOT RUN (SLOW)* -- backup if above code does not run w/o errors
-# convert to pandas
-#dataframe = gdeltTargetOutput.toPandas()
-
-#for country in dataframe['ActionGeo_FullName'].unique():
- # country_df = dataframe.loc[ dataframe['ActionGeo_FullName'] == country]
-  
- # for date in country_df['EventTimeDate'].unique():
-   # date_df = country_df.loc[ dataframe['EventTimeDate'] == date]
-
-   # for event_code in event_codes:
-    #  if event_code in date_df['EventRootCodeString']: 
-       # next
-      #else:
-       # dataframe = dataframe.append({'ActionGeo_FullName': country, 
-                                     # 'EventTimeDate': date, 
-                                     # 'EventRootCodeString': event_code,
-                                     # 'avgConfidence': 0, 
-                                     # 'GoldsteinReportValue': 0, 
-                                     # 'ToneReportValue': 0, 
-                                     # 'nArticles': 0}, ignore_index=True)
-
-# convert back to PySpark        
-#gdeltTargetOutputModified = spark.createDataFrame(dataframe)
+# MAGIC %md 
+# MAGIC   convert to pandas
+# MAGIC #dataframe = gdeltTargetOutput.toPandas()
+# MAGIC 
+# MAGIC for country in dataframe['ActionGeo_FullName'].unique():
+# MAGIC    country_df = dataframe.loc[ dataframe['ActionGeo_FullName'] == country]
+# MAGIC   
+# MAGIC   for date in country_df['EventTimeDate'].unique():
+# MAGIC     date_df = country_df.loc[ dataframe['EventTimeDate'] == date]
+# MAGIC 
+# MAGIC     for event_code in event_codes:
+# MAGIC       if event_code in date_df['EventRootCodeString']: 
+# MAGIC         next
+# MAGIC       else:
+# MAGIC         dataframe = dataframe.append({'ActionGeo_FullName': country, 
+# MAGIC                                       'EventTimeDate': date, 
+# MAGIC                                       'EventRootCodeString': event_code,
+# MAGIC                                       'avgConfidence': 0, 
+# MAGIC                                       'GoldsteinReportValue': 0, 
+# MAGIC                                       'ToneReportValue': 0, 
+# MAGIC                                       'nArticles': 0}, ignore_index=True)
+# MAGIC 
+# MAGIC # convert back to PySpark        
+# MAGIC gdeltTargetOutputModified = spark.createDataFrame(dataframe)
 
 # COMMAND ----------
 
@@ -257,6 +259,10 @@ targetValueOutput.limit(2).toPandas()
 
 # COMMAND ----------
 
+targetValueOutput.limit(12).toPandas()
+
+# COMMAND ----------
+
 # MAGIC %md
 # MAGIC #### (2) Goldstein report value (GRV)
 # MAGIC Calculated as the average Goldstein score for all articles tagged as associated to the country
@@ -280,10 +286,10 @@ gdeltTargetOutput2.limit(2).toPandas()
 
 # DBTITLE 1,Create Rolling Average Windows
 # create a 3 day Window, 1 day previous to the current day (row), using previous casting of timestamp to long (number of seconds)
-rolling1d_window = Window.partitionBy('ActionGeo_FullName').orderBy(F.col('EventTimeDate').cast('timestamp').cast('long')).rangeBetween(-days(1), 0)
+rolling1d_window = Window.partitionBy('ActionGeo_FullName', 'if_conflict').orderBy(F.col('EventTimeDate').cast('timestamp').cast('long')).rangeBetween(-days(1), 0)
 
 # create a 60 day Window, 60 days previous to the current day (row), using previous casting of timestamp to long (number of seconds)
-rolling60d_window2 = Window.partitionBy('ActionGeo_FullName').orderBy(F.col('EventTimeDate').cast('timestamp').cast('long')).rangeBetween(-days(60), 0)
+rolling60d_window2 = Window.partitionBy('ActionGeo_FullName', 'if_conflict').orderBy(F.col('EventTimeDate').cast('timestamp').cast('long')).rangeBetween(-days(60), 0)
 
 # COMMAND ----------
 
@@ -304,6 +310,10 @@ weightedGRA2.limit(2).toPandas()
 
 # COMMAND ----------
 
+weightedGRA2.limit(12).toPandas()
+
+# COMMAND ----------
+
 # DBTITLE 1,Tone Report Value (TRV) within Country Window
 # get WEIGHTED 1d average
 weightedTRA1 = weightedGRA2.withColumn('wTRA_1d_num', F.sum(F.col('ToneReportValue') * F.col('nArticles')).over(rolling1d_window))
@@ -321,6 +331,10 @@ targetValueOutput2 = weightedTRA2.drop('wTRA_1d_num', 'wTRA_1d_dem', 'wTRA_60d_n
 # verify output data
 print((targetValueOutput2.count(), len(targetValueOutput2.columns)))
 targetValueOutput2.limit(2).toPandas()
+
+# COMMAND ----------
+
+targetValueOutput2.filter((F.col('ActionGeo_FullName') == 'Afghanistan')).orderBy('EventTimeDate').limit(10).toPandas()
 
 # COMMAND ----------
 
