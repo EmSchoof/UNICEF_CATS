@@ -270,13 +270,6 @@ goldsteinDataPartitioned.limit(4).toPandas()
 
 # COMMAND ----------
 
-# MAGIC %md
-# MAGIC ### Test for Normal Distribution of Goldstein by Country for Conflict/Not
-# MAGIC - The **Jarque-Bera** test tests whether the sample data has the skewness and kurtosis matching a normal distribution.
-# MAGIC - Since this test only works for a large enough number of data samples (>2000) as the test statistic asymptotically has a Chi-squared distribution with 2 degrees of freedom, there will be a secondary step to verify that each sample size is sufficient.
-
-# COMMAND ----------
-
 def get_normal_pval(vars_list):
     if len(vars_list) >= 8:
       k2, p = stats.normaltest(vars_list)
@@ -329,8 +322,8 @@ goldsteinDataAll.limit(5).toPandas()
 
 # COMMAND ----------
 
-goldsteinDataAll.select('ActionGeo_FullName','n_observations', 'if_normal_1d').filter(F.col('if_normal_1d') == False).show()
+goldsteinDataAll.select('ActionGeo_FullName','n_observations', 'if_normal_1d').filter(F.col('if_normal_1d') == False).count()
 
 # COMMAND ----------
 
-goldsteinDataAll.select('ActionGeo_FullName','n_observations','if_normal_60d').filter(F.col('if_normal_60d') == False).show()
+goldsteinDataAll.select('ActionGeo_FullName','n_observations','if_normal_60d').filter(F.col('if_normal_60d') == False).count()
