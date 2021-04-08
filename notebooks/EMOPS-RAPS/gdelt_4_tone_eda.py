@@ -47,12 +47,18 @@ preprocessedGDELT.limit(10).toPandas()
 
 # COMMAND ----------
 
-# DBTITLE 1,Select Goldstein Data
+# DBTITLE 1,Select Tone Data
 toneData = preprocessedGDELT.select('ActionGeo_FullName','EventTimeDate','nArticles','avgConfidence',
                                           'ToneReportValue','wTRA_1d','wTRA_60d','if_conflict')
 
 print((toneData.count(), len(toneData.columns)))
 toneData.limit(2).toPandas()
+
+# COMMAND ----------
+
+datesDF = toneData.select('EventTimeDate')
+min_date, max_date = datesDF.select(F.min('EventTimeDate'),F.max('EventTimeDate')).first()
+min_date, max_date
 
 # COMMAND ----------
 
@@ -201,13 +207,6 @@ som_trv60d_nonconflict = eda_funcs(df=toneData, country='Somalia', col='wTRA_60d
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC 
-# MAGIC #### Initial Conclusion:
-# MAGIC All versions of the EventReportValue (Daily and Rolling Averages) in both Conflict and Non-Conflict events have normal distribution. proposed parametric standard deviation, which is a form of descriptive statistics that is reliant on normal distribution.
-
-# COMMAND ----------
-
-# MAGIC %md
 # MAGIC ### Explore Tone distribution per country 
 # MAGIC [source](https://syamkakarla.medium.com/intermediate-guide-to-pyspark-pyspark-sql-functions-with-examples-7eec883b5eaa)
 
@@ -224,30 +223,8 @@ som_trv60d_nonconflict = eda_funcs(df=toneData, country='Somalia', col='wTRA_60d
 
 # COMMAND ----------
 
-toneDataPartitioned = toneData.select('ActionGeo_FullName', 'if_conflict', 'wTRA_1d', 'wTRA_60d', 'nArticles') \
-                                        .groupBy('ActionGeo_FullName', 'if_conflict') \
-                                        .agg( F.skewness('wTRA_1d'),
-                                              F.kurtosis('wTRA_1d'),
-                                              F.stddev('wTRA_1d'),
-                                              F.variance('wTRA_1d'),
-                                              F.collect_list('wTRA_1d').alias('list_wTRA_1d'),
-                                              F.skewness('wTRA_60d'),
-                                              F.kurtosis('wTRA_60d'),
-                                              F.stddev('wTRA_60d'),
-                                              F.variance('wTRA_60d'),
-                                              F.collect_list('wTRA_60d').alias('list_wTRA_60d'),
-                                              F.sum('nArticles').alias('nArticles'),
-                                              F.count(F.lit(1)).alias('n_observations')
-                                        )
-
-toneDataPartitioned.limit(4).toPandas()
-
-# COMMAND ----------
-
 # MAGIC %md
-# MAGIC ### Test for Normal Distribution of Goldstein by Country for Conflict/Not
-# MAGIC - The **Jarque-Bera** test tests whether the sample data has the skewness and kurtosis matching a normal distribution.
-# MAGIC - Since this test only works for a large enough number of data samples (>2000) as the test statistic asymptotically has a Chi-squared distribution with 2 degrees of freedom, there will be a secondary step to verify that each sample size is sufficient.
+# MAGIC ### Test for Normal Distribution of Tone by Country without distinguishing between if_conflict
 
 # COMMAND ----------
 
@@ -270,11 +247,6 @@ def if_norm(p):
 # Create UDF funcs
 get_pval_udf = F.udf(lambda vars: get_normal_pval(vars), FloatType())
 if_norm_udf = F.udf(lambda p: if_norm(p), BooleanType())
-
-# COMMAND ----------
-
-# MAGIC %md 
-# MAGIC ### Assess Variables without distinguishing between if_conflict 
 
 # COMMAND ----------
 
@@ -303,8 +275,8 @@ toneDataAll.limit(5).toPandas()
 
 # COMMAND ----------
 
-toneDataAll.select('ActionGeo_FullName', 'if_normal_1d').filter(F.col('if_normal_1d') == False).show()
+toneDataAll.select('ActionGeo_FullName', 'if_normal_1d').filter(F.col('if_normal_1d') == False).count()
 
 # COMMAND ----------
 
-toneDataAll.select('ActionGeo_FullName', 'if_normal_60d').filter(F.col('if_normal_60d') == False).show()
+toneDataAll.select('ActionGeo_FullName', 'if_normal_60d').filter(F.col('if_normal_60d') == False).count()
