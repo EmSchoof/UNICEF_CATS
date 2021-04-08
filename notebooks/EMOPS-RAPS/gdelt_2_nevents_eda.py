@@ -55,7 +55,7 @@ preprocessedGDELT = spark.read.format("csv") \
   .option("inferSchema", infer_schema) \
   .option("header", first_row_is_header) \
   .option("sep", delimiter) \
-  .load("/Filestore/tables/tmp/gdelt/targetvalues.csv")
+  .load("/Filestore/tables/tmp/gdelt/targetvalues_confidence40plus.csv") #
 print((preprocessedGDELT.count(), len(preprocessedGDELT.columns)))
 preprocessedGDELT.limit(10).toPandas()
 
