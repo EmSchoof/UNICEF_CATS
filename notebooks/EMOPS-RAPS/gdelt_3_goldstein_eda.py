@@ -71,14 +71,9 @@ goldsteinData.limit(2).toPandas()
 
 # COMMAND ----------
 
-# It's a best practice to sample data from your Spark df into pandas
-sub_goldsteinData = goldsteinData#.sample(withReplacement=False, fraction=0.5, seed=42)
-
-# separate into conflict vs not 
-goldsteinDataConflict = sub_goldsteinData.filter(F.col('if_conflict') == True)
-print((goldsteinDataConflict.count(), len(goldsteinDataConflict.columns)))
-goldsteinDataNonConflict = sub_goldsteinData.filter(F.col('if_conflict') != True)
-print((goldsteinDataNonConflict.count(), len(goldsteinDataNonConflict.columns)))
+datesDF = goldsteinData.select('EventTimeDate')
+min_date, max_date = datesDF.select(F.min('EventTimeDate'),F.max('EventTimeDate')).first()
+min_date, max_date
 
 # COMMAND ----------
 
