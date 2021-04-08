@@ -8,6 +8,10 @@ from pyspark.sql.types import *
 # COMMAND ----------
 
 # DBTITLE 1,Import Data from Big Query
+# import december
+bq_gdelt_dec = spark.read.format("bigquery").option("table",'unicef-gdelt.december2020.events-mentions').load()
+print('December 2020 Event-Mentions Data: ', (bq_gdelt_dec.count(), len(bq_gdelt_dec.columns)))
+
 # import january
 bq_gdelt_jan = spark.read.format("bigquery").option("table",'unicef-gdelt.january2021.events-mentions').load()
 print('January 2021 Event-Mentions Data: ', (bq_gdelt_jan.count(), len(bq_gdelt_jan.columns)))
@@ -16,11 +20,17 @@ print('January 2021 Event-Mentions Data: ', (bq_gdelt_jan.count(), len(bq_gdelt_
 bq_gdelt_feb = spark.read.format("bigquery").option("table",'unicef-gdelt.february2021.events-mentions').load()
 print('February 2021 Event-Mentions Data: ', (bq_gdelt_feb.count(), len(bq_gdelt_feb.columns)))
 
+# import march
+bq_gdelt_march = spark.read.format("bigquery").option("table",'unicef-gdelt.march2021.events-mentions').load()
+print('March 2021 Event-Mentions Data: ', (bq_gdelt_march.count(), len(bq_gdelt_march.columns)))
+
 # COMMAND ----------
 
 # merge dataframes
-bq_gdelt = bq_gdelt_jan.union(bq_gdelt_feb)
-print('January and February 2021 Event-Mentions Data: ', (bq_gdelt.count(), len(bq_gdelt.columns)))
+bq_gdelt1 = bq_gdelt_dec.union(bq_gdelt_jan)
+bq_gdelt2 = bq_gdelt1.union(bq_gdelt_feb)
+bq_gdelt = bq_gdelt2.union(bq_gdelt_march)
+print('December 2020 through March 2021 Event-Mentions Data: ', (bq_gdelt.count(), len(bq_gdelt.columns)))
 bq_gdelt.limit(10).toPandas()
 
 # COMMAND ----------
@@ -151,8 +161,8 @@ gdeltFebNoNulls.limit(2).toPandas()
 # COMMAND ----------
 
 # Convert date-strings to date columns
-gdeltFebNoNulls = gdeltFebNoNulls.withColumn('EventTimeDate', F.date(F.unix_timestamp(F.col('EventTimeDate'), 'yyyyMMddHHmmss').cast("timestamp")))
-gdeltFebNoNulls = gdeltFebNoNulls.withColumn('MentionTimeDate', F.date(F.unix_timestamp(F.col('MentionTimeDate'), 'yyyyMMddHHmmss').cast("timestamp")))
+gdeltFebNoNulls = gdeltFebNoNulls.withColumn('EventTimeDate', F.unix_timestamp(F.col('EventTimeDate'), 'yyyyMMddHHmmss').cast("timestamp"))
+gdeltFebNoNulls = gdeltFebNoNulls.withColumn('MentionTimeDate', F.unix_timestamp(F.col('MentionTimeDate'), 'yyyyMMddHHmmss').cast("timestamp"))
 
 # Confirm output
 gdeltFebNoNulls.limit(2).toPandas()
@@ -311,7 +321,11 @@ gdeltFebNoNullsSelectDFIPS = gdeltFebNoNullsSelectD.withColumn(
     .when(F.col('ActionGeo_CountryCode') == 'VM', "Vietnam")
     .when(F.col('ActionGeo_CountryCode') == 'JN', "Jan Mayen")
     .when(F.col('ActionGeo_CountryCode') == 'LQ', "Palmyra Atoll")
+    .when(F.col('ActionGeo_CountryCode') == 'BQ', "Navassa Island")
     .when(F.col('ActionGeo_CountryCode') == 'JQ', "Johnston Atoll")
+    .when(F.col('ActionGeo_CountryCode') == 'BS', "Bassas da India")
+    .when(F.col('ActionGeo_CountryCode') == 'FQ', "Baker Island")
+    .when(F.col('ActionGeo_CountryCode') == 'IP', "Clipperton Island")
     .otherwise(F.col('ActionGeo_FullName'))
 )
 
