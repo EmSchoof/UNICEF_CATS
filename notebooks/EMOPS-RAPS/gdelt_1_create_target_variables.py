@@ -19,10 +19,6 @@
 # MAGIC Calculated as the rolling average of the ERV for 3 days over the previous 12 months
 # MAGIC -	Event Running Average 2 (ERA2):
 # MAGIC Calculated as the rolling average of the ERV for 60 days over the previous 24 months
-# MAGIC -	Event spike alert: 
-# MAGIC When the *Event Report Value* for a given 3 days is one standard deviation above ERA1* 
-# MAGIC -	Event trend alert: 
-# MAGIC when the *Event Report Value* for a given 60 days is one standard deviation above ERA2*
 # MAGIC 
 # MAGIC 
 # MAGIC ### Calculations – Averages of Goldstein Scores
@@ -33,10 +29,6 @@
 # MAGIC Calculated as the rolling average of the GPV for PA13 over the previous 12 months
 # MAGIC -	Goldstein Running Average (GRA2):
 # MAGIC Calculated as the rolling average of the GPV for 60 days over the previous 24 months
-# MAGIC -	Goldstein spike alert: 
-# MAGIC When the *Goldstein Point Value* for a given 1 day is one standard deviation above GRA1* 
-# MAGIC -	Goldstein trend alert: 
-# MAGIC when the *Goldstein Point Value* for a given 60 days is one standard deviation above GRA2*
 # MAGIC 
 # MAGIC 
 # MAGIC ### Calculations – Averages of Tone Scores
@@ -47,19 +39,10 @@
 # MAGIC Calculated as the rolling average of the TPV for PA1 over the previous 12 months
 # MAGIC -	Tone Running Average (TRA2):
 # MAGIC Calculated as the rolling average of the TPV for 60 days over the previous 24 months
-# MAGIC -	Tone spike alert: 
-# MAGIC When the *Tone Point Value* for a given 1 day is one standard deviation above RA1* 
-# MAGIC -	Tone trend alert: 
-# MAGIC when the *Tone Point Value* for a given 60 days is one standard deviation above ERA2*
 # MAGIC 
 # MAGIC 
 # MAGIC Sources:
 # MAGIC - (1) [Moving Averaging with Apache Spark](https://www.linkedin.com/pulse/time-series-moving-average-apache-pyspark-laurent-weichberger/)
-# MAGIC 
-# MAGIC 
-# MAGIC 
-# MAGIC ### Purpose:
-# MAGIC - 
 
 # COMMAND ----------
 
@@ -107,6 +90,15 @@ preprocessedGDELT.limit(2).toPandas()
 
 # COMMAND ----------
 
+# DBTITLE 1,Select Data with Confidence of 40% or higher
+# create confidence column of more than 
+print(preprocessedGDELT.count())
+preprocessedGDELTT = preprocessedGDELT.filter(F.col('Confidence') >= 40)
+print(preprocessedGDELTT.count())
+preprocessedGDELTT.limit(2).toPandas()
+
+# COMMAND ----------
+
 # MAGIC %md
 # MAGIC #### (1) Event report value (ERV)
 # MAGIC Calculated as the distribution of articles with respect to an event type category per country per day
@@ -114,7 +106,7 @@ preprocessedGDELT.limit(2).toPandas()
 # COMMAND ----------
 
 # Create New Dataframe Column to Count Number of Daily Articles by Country by EventRootCode 
-gdeltTargetOutput = preprocessedGDELT.groupBy('ActionGeo_FullName','EventTimeDate','EventRootCodeString', 'if_conflict').agg(F.avg('Confidence').alias('avgConfidence'),
+gdeltTargetOutput = preprocessedGDELTT.groupBy('ActionGeo_FullName','EventTimeDate','EventRootCodeString', 'if_conflict').agg(F.avg('Confidence').alias('avgConfidence'),
                                                                                                       F.avg('GoldsteinScale').alias('GoldsteinReportValue'),
                                                                                                       F.avg('MentionDocTone').alias('ToneReportValue'),
                                                                                                       F.sum('nArticles').alias('nArticles')
@@ -338,63 +330,6 @@ targetValueOutput2.filter((F.col('ActionGeo_FullName') == 'Afghanistan')).orderB
 
 # COMMAND ----------
 
-# DBTITLE 0,Calculate Weighted Averages of Rolling Values
-def weighted_avg(original_avg, sample_n):
-  return np.sum(original_avg * sample_n) / np.sum(sample_n)
-
-
-weightedAvg = F.udf(lambda col: F.sum(F.col(col) * F.col('nArticles')) / F.sum('nArticles'))
-
-# COMMAND ----------
-
-# DBTITLE 1,Assess Value Correlations In Dataset
-def plot_corr_matrix(correlations,attr,fig_no):
-    fig=plt.figure(fig_no, figsize=(16,10))
-    ax=fig.add_subplot(111)
-    ax.set_title("Correlation Matrix for Specified Attributes")
-    ax.set_xticklabels(['']+attr)
-    ax.set_yticklabels(['']+attr)
-    cax=ax.matshow(correlations,vmax=1,vmin=-1)
-    fig.colorbar(cax)
-    plt.show()
-
-def get_corr(cols):
-  # select variables to check correlation
-  df_features = targetValueOutput.select(cols) 
-
-  # create RDD table for correlation calculation
-  rdd_table = df_features.rdd.map(lambda row: row[0:])
-
-  # get the correlation matrix
-  corr_mat=Statistics.corr(rdd_table, method="pearson")
-  plot_corr_matrix(corr_mat, df_features.columns, 234)
-
-# COMMAND ----------
-
-# DBTITLE 1,EventReportValue
-# select variables to check correlation
-#get_corr(['avgConfidence','EventReportValue','wERA_3d','wERA_60d']) 
-
-# COMMAND ----------
-
-# DBTITLE 1,GoldsteinReportValue
-# select variables to check correlation
-#get_corr(['avgConfidence','GoldsteinReportValue','wGRA_3d','wGRA_60d']) 
-
-# COMMAND ----------
-
-# DBTITLE 1,ToneReportValue
-# select variables to check correlation
-#get_corr(['avgConfidence','ToneReportValue','wTRA_3d','wTRA_60d'])
-
-# COMMAND ----------
-
-# DBTITLE 1,Overall
-# select variables to check correlation
-#get_corr(['wERA_3d','wERA_60d','wGRA_3d','wGRA_60d','wTRA_3d','wTRA_60d']) 
-
-# COMMAND ----------
-
 # DBTITLE 1,Save Target Data as CSV
-targetValueOutput.write.format('csv').option('header',True).mode('overwrite').option('sep',',').save('/Filestore/tables/tmp/gdelt/targetvalues.csv')
-targetValueOutput2.write.format('csv').option('header',True).mode('overwrite').option('sep',',').save('/Filestore/tables/tmp/gdelt/gold_tone_targetvalues.csv')
+targetValueOutput.write.format('csv').option('header',True).mode('overwrite').option('sep',',').save('/Filestore/tables/tmp/gdelt/targetvalues_confidence40plus.csv')
+targetValueOutput2.write.format('csv').option('header',True).mode('overwrite').option('sep',',').save('/Filestore/tables/tmp/gdelt/gold_tone_targetvalues_confidence40plus.csv')
