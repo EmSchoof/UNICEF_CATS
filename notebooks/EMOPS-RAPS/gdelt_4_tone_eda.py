@@ -9,9 +9,9 @@
 # MAGIC -	Tone Running Average (TRA2):
 # MAGIC Calculated as the rolling average of the TPV for PA2 over the previous 24 months
 # MAGIC -	Tone spike alert: 
-# MAGIC When the *Tone Point Value* for a given PA1 (*1 DAYS*) is one standard deviation above ERA1* 
+# MAGIC When the *Tone Point Value* for a given PA1 (*1 DAYS*) is one standard deviation above TRA1* 
 # MAGIC -	Tone trend alert: 
-# MAGIC when the *Tone Point Value* for a given PA2 (*60 DAYS*) is one standard deviation above ERA2*
+# MAGIC when the *Tone Point Value* for a given PA2 (*60 DAYS*) is one standard deviation above TRA2*
 
 # COMMAND ----------
 
