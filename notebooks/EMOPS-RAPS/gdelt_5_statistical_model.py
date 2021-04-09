@@ -111,9 +111,10 @@ toneReportValues = toneReportValues.withColumn('TRV_1d_list',  stripstring_udf(F
 # COMMAND ----------
 
 diff_udf = F.udf(lambda median, arr: [x - median for x in arr],
-                   ArrayType(FloatType()))
-MAD_udf = F.udf(lambda arr: [ percentile(diff, array(0.5))[0] for diff in arr],
-                   ArrayType(FloatType()))
+                   ArrayType(DoubleType()))
+
+MAD_udf = F.udf(lambda arr: [ float(np.median(diff)) for diff in arr],
+                   ArrayType(DoubleType()))
 
 # COMMAND ----------
 
