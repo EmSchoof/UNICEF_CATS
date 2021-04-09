@@ -161,6 +161,10 @@ ervOutputMedian1 = ervOutputPartitioned.withColumn('ERV_3d_list', F.collect_list
 ervOutputMedians = ervOutputMedian1.withColumn('ERV_60d_list', F.collect_list('EventReportValue').over(rolling60d_window)) \
                                         .withColumn('ERV_60d_median', median_udf('ERV_60d_list'))
 
+# convert array columns to strings
+ervOutputMedians = ervOutputMedians.withColumn('ERV_3d_list', ervOutputMedians.ERV_3d_list.cast(StringType()))
+ervOutputMedians = ervOutputMedians.withColumn('ERV_60d_list', ervOutputMedians.ERV_60d_list.cast(StringType()))
+
 # verify output data
 print((ervOutputMedians.count(), len(ervOutputMedians.columns)))
 ervOutputMedians.limit(10).toPandas()
@@ -206,6 +210,10 @@ goldsteinOutputMedian1 = goldToneOutput.withColumn('GRV_1d_list', F.collect_list
 goldsteinOutputMedians = goldsteinOutputMedian1.withColumn('GRV_60d_list', F.collect_list('GoldsteinReportValue').over(rolling60d_window2)) \
                                         .withColumn('GRV_60d_median', median_udf('GRV_60d_list'))
 
+# convert array columns to strings
+goldsteinOutputMedians = goldsteinOutputMedians.withColumn('GRV_1d_list', goldsteinOutputMedians.GRV_1d_list.cast(StringType()))
+goldsteinOutputMedians = goldsteinOutputMedians.withColumn('GRV_60d_list', goldsteinOutputMedians.GRV_60d_list.cast(StringType()))
+
 # verify output data
 print((goldsteinOutputMedians.count(), len(goldsteinOutputMedians.columns)))
 goldsteinOutputMedians.limit(2).toPandas()
@@ -221,6 +229,10 @@ toneOutputMedian1 = goldToneOutput.withColumn('TRV_1d_list', F.collect_list('Ton
 toneOutputMedians = toneOutputMedian1.withColumn('TRV_60d_list', F.collect_list('ToneReportValue').over(rolling60d_window2)) \
                                         .withColumn('TRV_60d_median', median_udf('TRV_60d_list'))
 
+# convert array columns to strings
+toneOutputMedians = toneOutputMedians.withColumn('TRV_1d_list', toneOutputMedians.TRV_1d_list.cast(StringType()))
+toneOutputMedians = toneOutputMedians.withColumn('TRV_60d_list', toneOutputMedians.TRV_60d_list.cast(StringType()))
+
 # verify output data
 print((toneOutputMedians.count(), len(toneOutputMedians.columns)))
 toneOutputMedians.limit(2).toPandas()
@@ -228,6 +240,6 @@ toneOutputMedians.limit(2).toPandas()
 # COMMAND ----------
 
 # DBTITLE 1,Save Target Data as CSV
-#ervOutputMedians.write.format('csv').option('header',True).mode('overwrite').option('sep',',').save('/Filestore/tables/tmp/gdelt/erv_confidence40plus.csv')
-#goldsteinOutputMedians.write.format('csv').option('header',True).mode('overwrite').option('sep',',').save('/Filestore/tables/tmp/gdelt/grv_confidence40plus.csv')
-#toneOutputMedians.write.format('csv').option('header',True).mode('overwrite').option('sep',',').save('/Filestore/tables/tmp/gdelt/trv_confidence40plus.csv')
+ervOutputMedians.write.format('csv').option('header',True).mode('overwrite').option('sep',',').save('/Filestore/tables/tmp/gdelt/erv_confidence40plus.csv')
+goldsteinOutputMedians.write.format('csv').option('header',True).mode('overwrite').option('sep',',').save('/Filestore/tables/tmp/gdelt/grv_confidence40plus.csv')
+toneOutputMedians.write.format('csv').option('header',True).mode('overwrite').option('sep',',').save('/Filestore/tables/tmp/gdelt/trv_confidence40plus.csv')
