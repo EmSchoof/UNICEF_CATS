@@ -4,6 +4,7 @@
 # MAGIC ### Periods of Analysis
 # MAGIC - Period of Analysis 1 (PA1): 3 days
 # MAGIC - Period of Analysis 2 (PA2): 60 days 
+# MAGIC - Period of Analysis 3 (PA2): 1 days 
 # MAGIC 
 # MAGIC ### Premise of Task
 # MAGIC - Anomaly detection of target variables
@@ -18,10 +19,6 @@
 # MAGIC Calculated as the rolling average of the ERV for 3 days over the previous 12 months
 # MAGIC -	Event Running Average 2 (ERA2):
 # MAGIC Calculated as the rolling average of the ERV for 60 days over the previous 24 months
-# MAGIC -	Event spike alert: 
-# MAGIC When the *Event Report Value* for a given 3 days is one standard deviation above ERA1* 
-# MAGIC -	Event trend alert: 
-# MAGIC when the *Event Report Value* for a given 60 days is one standard deviation above ERA2*
 # MAGIC 
 # MAGIC 
 # MAGIC ### Calculations – Averages of Goldstein Scores
@@ -32,10 +29,6 @@
 # MAGIC Calculated as the rolling average of the GPV for PA13 over the previous 12 months
 # MAGIC -	Goldstein Running Average (GRA2):
 # MAGIC Calculated as the rolling average of the GPV for 60 days over the previous 24 months
-# MAGIC -	Goldstein spike alert: 
-# MAGIC When the *Goldstein Point Value* for a given 1 day is one standard deviation above GRA1* 
-# MAGIC -	Goldstein trend alert: 
-# MAGIC when the *Goldstein Point Value* for a given 60 days is one standard deviation above GRA2*
 # MAGIC 
 # MAGIC 
 # MAGIC ### Calculations – Averages of Tone Scores
@@ -46,19 +39,10 @@
 # MAGIC Calculated as the rolling average of the TPV for PA1 over the previous 12 months
 # MAGIC -	Tone Running Average (TRA2):
 # MAGIC Calculated as the rolling average of the TPV for 60 days over the previous 24 months
-# MAGIC -	Tone spike alert: 
-# MAGIC When the *Tone Point Value* for a given 1 day is one standard deviation above RA1* 
-# MAGIC -	Tone trend alert: 
-# MAGIC when the *Tone Point Value* for a given 60 days is one standard deviation above ERA2*
 # MAGIC 
 # MAGIC 
 # MAGIC Sources:
 # MAGIC - (1) [Moving Averaging with Apache Spark](https://www.linkedin.com/pulse/time-series-moving-average-apache-pyspark-laurent-weichberger/)
-# MAGIC 
-# MAGIC 
-# MAGIC 
-# MAGIC ### Purpose:
-# MAGIC - 
 
 # COMMAND ----------
 
@@ -94,7 +78,7 @@ preprocessedGDELT = spark.read.format("csv") \
 preprocessedGDELT = preprocessedGDELT.withColumn('EventTimeDate', F.col('EventTimeDate').cast('date'))
 print((preprocessedGDELT.count(), len(preprocessedGDELT.columns)))
 preprocessedGDELT.agg(F.countDistinct(F.col("GLOBALEVENTID")).alias("nEvents")).show()
-preprocessedGDELT.limit(2).toPandas()
+preprocessedGDELT.limit(10).toPandas()
 
 # COMMAND ----------
 
@@ -106,6 +90,15 @@ preprocessedGDELT.limit(2).toPandas()
 
 # COMMAND ----------
 
+# DBTITLE 1,Select Data with Confidence of 40% or higher
+# create confidence column of more than 
+print(preprocessedGDELT.count())
+preprocessedGDELTT = preprocessedGDELT.filter(F.col('Confidence') >= 40)
+print(preprocessedGDELTT.count())
+preprocessedGDELTT.limit(2).toPandas()
+
+# COMMAND ----------
+
 # MAGIC %md
 # MAGIC #### (1) Event report value (ERV)
 # MAGIC Calculated as the distribution of articles with respect to an event type category per country per day
@@ -113,7 +106,7 @@ preprocessedGDELT.limit(2).toPandas()
 # COMMAND ----------
 
 # Create New Dataframe Column to Count Number of Daily Articles by Country by EventRootCode 
-gdeltTargetOutput = preprocessedGDELT.groupBy('ActionGeo_FullName','EventTimeDate','EventRootCodeString', 'if_conflict').agg(F.avg('Confidence').alias('avgConfidence'),
+gdeltTargetOutput = preprocessedGDELTT.groupBy('ActionGeo_FullName','EventTimeDate','EventRootCodeString', 'if_conflict').agg(F.avg('Confidence').alias('avgConfidence'),
                                                                                                       F.avg('GoldsteinScale').alias('GoldsteinReportValue'),
                                                                                                       F.avg('MentionDocTone').alias('ToneReportValue'),
                                                                                                       F.sum('nArticles').alias('nArticles')
@@ -198,33 +191,6 @@ plt.plot(sumERV.select('sum(EventReportValue)').toPandas())
 
 # COMMAND ----------
 
-# DBTITLE 0,*Viable Pandas Code but DO NOT RUN (SLOW)* -- backup if above code does not run w/o errors
-# convert to pandas
-#dataframe = gdeltTargetOutput.toPandas()
-
-#for country in dataframe['ActionGeo_FullName'].unique():
- # country_df = dataframe.loc[ dataframe['ActionGeo_FullName'] == country]
-  
- # for date in country_df['EventTimeDate'].unique():
-   # date_df = country_df.loc[ dataframe['EventTimeDate'] == date]
-
-   # for event_code in event_codes:
-    #  if event_code in date_df['EventRootCodeString']: 
-       # next
-      #else:
-       # dataframe = dataframe.append({'ActionGeo_FullName': country, 
-                                     # 'EventTimeDate': date, 
-                                     # 'EventRootCodeString': event_code,
-                                     # 'avgConfidence': 0, 
-                                     # 'GoldsteinReportValue': 0, 
-                                     # 'ToneReportValue': 0, 
-                                     # 'nArticles': 0}, ignore_index=True)
-
-# convert back to PySpark        
-#gdeltTargetOutputModified = spark.createDataFrame(dataframe)
-
-# COMMAND ----------
-
 # DBTITLE 1,Create Rolling Average Windows
 # function to calculate number of seconds from number of days
 days = lambda i: i * 86400
@@ -257,6 +223,10 @@ targetValueOutput.limit(2).toPandas()
 
 # COMMAND ----------
 
+targetValueOutput.limit(12).toPandas()
+
+# COMMAND ----------
+
 # MAGIC %md
 # MAGIC #### (2) Goldstein report value (GRV)
 # MAGIC Calculated as the average Goldstein score for all articles tagged as associated to the country
@@ -280,10 +250,10 @@ gdeltTargetOutput2.limit(2).toPandas()
 
 # DBTITLE 1,Create Rolling Average Windows
 # create a 3 day Window, 1 day previous to the current day (row), using previous casting of timestamp to long (number of seconds)
-rolling1d_window = Window.partitionBy('ActionGeo_FullName').orderBy(F.col('EventTimeDate').cast('timestamp').cast('long')).rangeBetween(-days(1), 0)
+rolling1d_window = Window.partitionBy('ActionGeo_FullName', 'if_conflict').orderBy(F.col('EventTimeDate').cast('timestamp').cast('long')).rangeBetween(-days(1), 0)
 
 # create a 60 day Window, 60 days previous to the current day (row), using previous casting of timestamp to long (number of seconds)
-rolling60d_window2 = Window.partitionBy('ActionGeo_FullName').orderBy(F.col('EventTimeDate').cast('timestamp').cast('long')).rangeBetween(-days(60), 0)
+rolling60d_window2 = Window.partitionBy('ActionGeo_FullName', 'if_conflict').orderBy(F.col('EventTimeDate').cast('timestamp').cast('long')).rangeBetween(-days(60), 0)
 
 # COMMAND ----------
 
@@ -301,6 +271,10 @@ weightedGRA2 = weightedGRA2.withColumn('wGRA_60d', F.col('wGRA_60d_num')/F.col('
 # drop extra columns
 weightedGRA2 = weightedGRA2.drop('wGRA_1d_num', 'wGRA_1d_dem', 'wGRA_60d_num', 'wGRA_60d_dem')
 weightedGRA2.limit(2).toPandas()
+
+# COMMAND ----------
+
+weightedGRA2.limit(12).toPandas()
 
 # COMMAND ----------
 
@@ -324,63 +298,10 @@ targetValueOutput2.limit(2).toPandas()
 
 # COMMAND ----------
 
-# DBTITLE 0,Calculate Weighted Averages of Rolling Values
-def weighted_avg(original_avg, sample_n):
-  return np.sum(original_avg * sample_n) / np.sum(sample_n)
-
-
-weightedAvg = F.udf(lambda col: F.sum(F.col(col) * F.col('nArticles')) / F.sum('nArticles'))
-
-# COMMAND ----------
-
-# DBTITLE 1,Assess Value Correlations In Dataset
-def plot_corr_matrix(correlations,attr,fig_no):
-    fig=plt.figure(fig_no, figsize=(16,10))
-    ax=fig.add_subplot(111)
-    ax.set_title("Correlation Matrix for Specified Attributes")
-    ax.set_xticklabels(['']+attr)
-    ax.set_yticklabels(['']+attr)
-    cax=ax.matshow(correlations,vmax=1,vmin=-1)
-    fig.colorbar(cax)
-    plt.show()
-
-def get_corr(cols):
-  # select variables to check correlation
-  df_features = targetValueOutput.select(cols) 
-
-  # create RDD table for correlation calculation
-  rdd_table = df_features.rdd.map(lambda row: row[0:])
-
-  # get the correlation matrix
-  corr_mat=Statistics.corr(rdd_table, method="pearson")
-  plot_corr_matrix(corr_mat, df_features.columns, 234)
-
-# COMMAND ----------
-
-# DBTITLE 1,EventReportValue
-# select variables to check correlation
-#get_corr(['avgConfidence','EventReportValue','wERA_3d','wERA_60d']) 
-
-# COMMAND ----------
-
-# DBTITLE 1,GoldsteinReportValue
-# select variables to check correlation
-#get_corr(['avgConfidence','GoldsteinReportValue','wGRA_3d','wGRA_60d']) 
-
-# COMMAND ----------
-
-# DBTITLE 1,ToneReportValue
-# select variables to check correlation
-#get_corr(['avgConfidence','ToneReportValue','wTRA_3d','wTRA_60d'])
-
-# COMMAND ----------
-
-# DBTITLE 1,Overall
-# select variables to check correlation
-#get_corr(['wERA_3d','wERA_60d','wGRA_3d','wGRA_60d','wTRA_3d','wTRA_60d']) 
+targetValueOutput2.filter((F.col('ActionGeo_FullName') == 'Afghanistan')).orderBy('EventTimeDate').limit(10).toPandas()
 
 # COMMAND ----------
 
 # DBTITLE 1,Save Target Data as CSV
-targetValueOutput.write.format('csv').option('header',True).mode('overwrite').option('sep',',').save('/Filestore/tables/tmp/gdelt/targetvalues.csv')
-targetValueOutput2.write.format('csv').option('header',True).mode('overwrite').option('sep',',').save('/Filestore/tables/tmp/gdelt/gold_tone_targetvalues.csv')
+targetValueOutput.write.format('csv').option('header',True).mode('overwrite').option('sep',',').save('/Filestore/tables/tmp/gdelt/targetvalues_confidence40plus.csv')
+targetValueOutput2.write.format('csv').option('header',True).mode('overwrite').option('sep',',').save('/Filestore/tables/tmp/gdelt/gold_tone_targetvalues_confidence40plus.csv')

@@ -51,9 +51,9 @@ OPTIMIZE preprocessedGDELT
 
 # COMMAND ----------
 
-# DBTITLE 1,Select Only Conflict Events in Specific Countries
+# DBTITLE 1,<strike>Select Only Conflict Events in Specific Countries</strike>
 # filter on conflict events
-conflictEvents = preprocessedGDELT.filter(F.col('QuadClassString').isin('Verbal Conflict', 'Material Conflict'))
+conflictEvents = preprocessedGDELT#.filter(F.col('QuadClassString').isin('Verbal Conflict', 'Material Conflict'))
 print((conflictEvents.count(), len(conflictEvents.columns)))
 
 # filter on flagged countries from Horizan Scan

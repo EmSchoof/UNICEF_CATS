@@ -17,20 +17,14 @@
 # MAGIC -	Event trend alert: 
 # MAGIC when the *Event Report Value* for a given PA2 (*60 DAYS*) is <strike>one standard deviation</strike>  above ERA2*
 # MAGIC 
-# MAGIC 
-# MAGIC *New Methodology*
-# MAGIC - (1.0) Compute three day average for all the data values you have across all years. 
-# MAGIC - (1.a) Your result will be X = [x1, x2, x3, ... xn]
-# MAGIC - (2.0) Set a threshhold parameter z. // benchmark special parameter (needs to be established per country?) come up with a "Ground Truth" value
-# MAGIC - (3.0) For each value in X, compare with z 
-# MAGIC 
-# MAGIC *Execution of Methodology*
-# MAGIC - 1 - [create a list of 3 day moving averages from today - 365 days] // compare this list with defined 'z' anomalist behavior to the current 3 day average per EventRootCode
-# MAGIC - 2 - [create a list of 60 day moving averages from today - 730 days] // compare this list with defined 'z' anomalist behavior to the current 60 day average per EventRootCode
-# MAGIC 
-# MAGIC 
 # MAGIC Sources:
 # MAGIC - (1) [Moving Averaging with Apache Spark](https://www.linkedin.com/pulse/time-series-moving-average-apache-pyspark-laurent-weichberger/)
+# MAGIC 
+# MAGIC Statiticians and Machine Learning Engineers
+# MAGIC - Objective
+# MAGIC - Methodology of Outcome
+# MAGIC - Organizing Data to Deliver on that Outcome
+# MAGIC - Current Challenges that I am encountering to delivering this outcome
 
 # COMMAND ----------
 
@@ -61,7 +55,7 @@ preprocessedGDELT = spark.read.format("csv") \
   .option("inferSchema", infer_schema) \
   .option("header", first_row_is_header) \
   .option("sep", delimiter) \
-  .load("/Filestore/tables/tmp/gdelt/targetvalues.csv")
+  .load("/Filestore/tables/tmp/gdelt/targetvalues_confidence40plus.csv") #
 print((preprocessedGDELT.count(), len(preprocessedGDELT.columns)))
 preprocessedGDELT.limit(10).toPandas()
 
@@ -71,6 +65,12 @@ preprocessedGDELT.limit(10).toPandas()
 eventsData = preprocessedGDELT.select('ActionGeo_FullName','EventTimeDate','EventRootCodeString','nArticles','avgConfidence','EventReportValue','wERA_3d','wERA_60d')
 print((eventsData.count(), len(eventsData.columns)))
 eventsData.limit(2).toPandas()
+
+# COMMAND ----------
+
+datesDF = eventsData.select('EventTimeDate')
+min_date, max_date = datesDF.select(F.min('EventTimeDate'),F.max('EventTimeDate')).first()
+min_date, max_date
 
 # COMMAND ----------
 
@@ -127,6 +127,16 @@ def plot_dist(df, col):
     plt.xlabel(col) 
     plt.show()
 
+def normal_dist_proof(vars_list, title):
+    k2, p = stats.normaltest(vars_list)
+    alpha = 0.05 # 95% confidence
+    print("p = {}".format(p))
+    print("n = " + str(len(vars_list)))
+    if p < alpha: # if norm
+      print(title + " IS normally distributed.") 
+    else:
+      print(title + " *IS NOT* normally distributed.")
+
 def ecdf(data):
     """Compute ECDF for a one-dimensional array of measurements."""
     x = np.sort(data)
@@ -154,32 +164,19 @@ def eda_funcs(df, country, col, conflict=True):
   if conflict == True:
       name = 'Conflict'
       df1 = df.filter((F.col('ActionGeo_FullName') == country) & (F.col('if_conflict') == True))
-      list_vals = df.select(col).rdd.flatMap(lambda x: x).collect()
+      list_vals = df1.select(col).rdd.flatMap(lambda x: x).collect()
   else:
       name = 'NonConflict'  
       df1 = df.filter((F.col('ActionGeo_FullName') == country) & (F.col('if_conflict') != True))
-      list_vals = df.select(col).rdd.flatMap(lambda x: x).collect()
+      list_vals = df1.select(col).rdd.flatMap(lambda x: x).collect()
   
   print('Get ' + name + ' Quantiles for ' + col)
   get_quantiles(df1, col)
   plot_boxplot(list_vals, col)
   plot_dist(df1, col)
   plot_ecdf(list_vals,  name + ' ' +  col)
-  return list_vals
-
-# COMMAND ----------
-
-# MAGIC %md
-# MAGIC ### Compare Raw, Average, and Weighted Average of EventReportValue
-
-# COMMAND ----------
-
-AFG = eventsData.filter(F.col('ActionGeo_FullName') == 'Afghanistan').select('EventReportValue', 'wERA_3d', 'wERA_60d').toPandas()
-sns.pairplot(AFG)
-
-# COMMAND ----------
-
-event_codes = ['MAKE PUBLIC STATEMENT', 'APPEAL', 'EXPRESS INTENT TO COOPERATE', 'CONSULT', 'ENGAGE IN DIPLOMATIC COOPERATION', 'ENGAGE IN MATERIAL COOPERATION', 'PROVIDE AID', 'YIELD', 'INVESTIGATE', 'DEMAND', 'DISAPPROVE', 'REJECT', 'THREATEN', 'PROTEST', 'EXHIBIT MILITARY POSTURE', 'REDUCE RELATIONS', 'COERCE', 'ASSAULT', 'FIGHT', 'ENGAGE IN UNCONVENTIONAL MASS VIOLENCE']
+  normal_dist_proof(list_vals,  name + ' ' +  col)
+  return list_vals 
 
 # COMMAND ----------
 
@@ -196,11 +193,6 @@ afg_erv_nonconflict = eda_funcs(df=eventsData, country='Afghanistan', col='Event
 
 # COMMAND ----------
 
-# ERV_3d: Apply Kruskal-Wallis H-test
-stats.kruskal(afg_erv_conflict, afg_erv_nonconflict)
-
-# COMMAND ----------
-
 # MAGIC %md
 # MAGIC ### wERA 3D
 
@@ -214,11 +206,6 @@ afg_erv3d_nonconflict = eda_funcs(df=eventsData, country='Afghanistan', col='wER
 
 # COMMAND ----------
 
-# ERV_3d: Apply Kruskal-Wallis H-test
-stats.kruskal(afg_erv3d_conflict, afg_erv3d_nonconflict)
-
-# COMMAND ----------
-
 # MAGIC %md
 # MAGIC ### wERA 60D
 
@@ -229,11 +216,6 @@ afg_erv60d_conflict = eda_funcs(df=eventsData, country='Afghanistan', col='wERA_
 # COMMAND ----------
 
 afg_erv60d_nonconflict = eda_funcs(df=eventsData, country='Afghanistan', col='wERA_60d', conflict=False)
-
-# COMMAND ----------
-
-# ERV_3d: Apply Kruskal-Wallis H-test
-stats.kruskal(afg_erv60d_conflict, afg_erv60d_nonconflict)
 
 # COMMAND ----------
 
@@ -266,3 +248,122 @@ stats.kruskal(afg_erv60d_conflict, afg_erv60d_nonconflict)
 # MAGIC 
 # MAGIC 
 # MAGIC (B) Another option is to transform the data in order create a normally-distributed variable. Since this variable is a percentage, one post suggested transforming the data via the arcsine method [source](https://www.researchgate.net/post/Should_I_do_log_transform_percentage_data_of_cell_subsets_measured_with_FACS/54b682a5d2fd645a788b4686/citation/download). Arcsine, or angular, transformation is the preferred variable transformation for multivariant problems where both 0% and 100% are viable options. [source](http://strata.uga.edu/8370/rtips/proportions.html#:~:text=The%20arcsine%20transformation%20(also%20called,square%20root%20of%20the%20proportion.&text=Multiplying%20by%20two%20makes%20the,scale%20stop%20at%20pi%2F2.)
+
+# COMMAND ----------
+
+# ERV_3d: Apply Kruskal-Wallis H-test
+stats.kruskal(afg_erv_conflict, afg_erv_nonconflict)
+
+# COMMAND ----------
+
+# ERV_3d: Apply Kruskal-Wallis H-test
+stats.kruskal(afg_erv3d_conflict, afg_erv3d_nonconflict)
+
+# COMMAND ----------
+
+# ERV_3d: Apply Kruskal-Wallis H-test
+stats.kruskal(afg_erv60d_conflict, afg_erv60d_nonconflict)
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC ### Verify for Non-Normal Distribution for multiple Countries
+
+# COMMAND ----------
+
+def get_normal_pval(vars_list):
+    if len(vars_list) >= 8:
+      k2, p = stats.normaltest(vars_list)
+      return float(p)
+    else:
+      return float('nan')
+
+def if_norm(p):
+    alpha = 0.05 # 95% confidence
+    if p < alpha: # if norm
+      return True
+    elif np.isnan(p) == True:
+      return False
+    else:
+      return False
+
+# Create UDF funcs
+get_pval_udf = F.udf(lambda vars: get_normal_pval(vars), FloatType())
+if_norm_udf = F.udf(lambda p: if_norm(p), BooleanType())
+
+# COMMAND ----------
+
+eventsDataAll = eventsData.select('ActionGeo_FullName', 'wERA_3d', 'wERA_60d', 'nArticles') \
+                                        .groupBy('ActionGeo_FullName') \
+                                        .agg( F.skewness('wERA_3d'),
+                                              F.kurtosis('wERA_3d'),
+                                              F.stddev('wERA_3d'),
+                                              F.variance('wERA_3d'),
+                                              F.collect_list('wERA_3d').alias('list_wERA_3d'),
+                                              F.skewness('wERA_60d'),
+                                              F.kurtosis('wERA_60d'),
+                                              F.stddev('wERA_60d'),
+                                              F.variance('wERA_60d'),
+                                              F.collect_list('wERA_60d').alias('list_wERA_60d'),
+                                              F.sum('nArticles').alias('nArticles'),
+                                              F.count(F.lit(1)).alias('n_observations')
+                                        )
+
+# get p-value and define normalcy
+eventsDataAll = eventsDataAll.withColumn('p_value_3d', get_pval_udf(eventsDataAll.list_wERA_3d))
+eventsDataAll = eventsDataAll.withColumn('if_normal_3d', if_norm_udf(eventsDataAll.p_value_3d))
+eventsDataAll = eventsDataAll.withColumn('p_value_60d', get_pval_udf(eventsDataAll.list_wERA_60d))
+eventsDataAll = eventsDataAll.withColumn('if_normal_60d', if_norm_udf(eventsDataAll.p_value_60d))
+eventsDataAll.limit(5).toPandas()
+
+# COMMAND ----------
+
+eventsDataAll.select('ActionGeo_FullName','n_observations', 'if_normal_3d').filter(F.col('if_normal_3d') == False).count()
+
+# COMMAND ----------
+
+eventsDataAll.select('ActionGeo_FullName','n_observations','if_normal_60d').filter(F.col('if_normal_60d') == False).count()
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC #### Explore ERV by Country by Event Code
+
+# COMMAND ----------
+
+eventsCodeData = preprocessedGDELT.select('ActionGeo_FullName','EventTimeDate','EventRootCodeString','nArticles','avgConfidence','EventReportValue','wERA_3d','wERA_60d')
+print((eventsCodeData.count(), len(eventsCodeData.columns)))
+eventsCodeData.limit(2).toPandas()
+
+# COMMAND ----------
+
+eventsCodeDataAll = eventsCodeData.select('ActionGeo_FullName', 'EventRootCodeString', 'wERA_3d', 'wERA_60d', 'nArticles') \
+                                        .groupBy('ActionGeo_FullName', 'EventRootCodeString') \
+                                        .agg( F.skewness('wERA_3d'),
+                                              F.kurtosis('wERA_3d'),
+                                              F.stddev('wERA_3d'),
+                                              F.variance('wERA_3d'),
+                                              F.collect_list('wERA_3d').alias('list_wERA_3d'),
+                                              F.skewness('wERA_60d'),
+                                              F.kurtosis('wERA_60d'),
+                                              F.stddev('wERA_60d'),
+                                              F.variance('wERA_60d'),
+                                              F.collect_list('wERA_60d').alias('list_wERA_60d'),
+                                              F.sum('nArticles').alias('nArticles'),
+                                              F.count(F.lit(1)).alias('n_observations')
+                                        )
+
+# get p-value and define normalcy
+eventsCodeDataAll = eventsCodeDataAll.withColumn('p_value_3d', get_pval_udf(eventsCodeDataAll.list_wERA_3d))
+eventsCodeDataAll = eventsCodeDataAll.withColumn('if_normal_3d', if_norm_udf(eventsCodeDataAll.p_value_3d))
+eventsCodeDataAll = eventsCodeDataAll.withColumn('p_value_60d', get_pval_udf(eventsCodeDataAll.list_wERA_60d))
+eventsCodeDataAll = eventsCodeDataAll.withColumn('if_normal_60d', if_norm_udf(eventsCodeDataAll.p_value_60d))
+eventsCodeDataAll.limit(5).toPandas()
+
+# COMMAND ----------
+
+eventsCodeDataAll.select('ActionGeo_FullName','n_observations', 'if_normal_3d').filter(F.col('if_normal_3d') == False).count()
+
+# COMMAND ----------
+
+eventsCodeDataAll.select('ActionGeo_FullName','n_observations','if_normal_60d').filter(F.col('if_normal_60d') == False).count()

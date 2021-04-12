@@ -56,7 +56,7 @@ preprocessedGDELT = spark.read.format("csv") \
   .option("inferSchema", infer_schema) \
   .option("header", first_row_is_header) \
   .option("sep", delimiter) \
-  .load("/Filestore/tables/tmp/gdelt/gold_tone_targetvalues.csv")
+  .load("/Filestore/tables/tmp/gdelt/gold_tone_targetvalues_confidence40plus.csv")
 print((preprocessedGDELT.count(), len(preprocessedGDELT.columns)))
 preprocessedGDELT.limit(10).toPandas()
 
@@ -71,14 +71,9 @@ goldsteinData.limit(2).toPandas()
 
 # COMMAND ----------
 
-# It's a best practice to sample data from your Spark df into pandas
-sub_goldsteinData = goldsteinData#.sample(withReplacement=False, fraction=0.5, seed=42)
-
-# separate into conflict vs not 
-goldsteinDataConflict = sub_goldsteinData.filter(F.col('if_conflict') == True)
-print((goldsteinDataConflict.count(), len(goldsteinDataConflict.columns)))
-goldsteinDataNonConflict = sub_goldsteinData.filter(F.col('if_conflict') != True)
-print((goldsteinDataNonConflict.count(), len(goldsteinDataNonConflict.columns)))
+datesDF = goldsteinData.select('EventTimeDate')
+min_date, max_date = datesDF.select(F.min('EventTimeDate'),F.max('EventTimeDate')).first()
+min_date, max_date
 
 # COMMAND ----------
 
@@ -270,13 +265,6 @@ goldsteinDataPartitioned.limit(4).toPandas()
 
 # COMMAND ----------
 
-# MAGIC %md
-# MAGIC ### Test for Normal Distribution of Goldstein by Country for Conflict/Not
-# MAGIC - The **Jarque-Bera** test tests whether the sample data has the skewness and kurtosis matching a normal distribution.
-# MAGIC - Since this test only works for a large enough number of data samples (>2000) as the test statistic asymptotically has a Chi-squared distribution with 2 degrees of freedom, there will be a secondary step to verify that each sample size is sufficient.
-
-# COMMAND ----------
-
 def get_normal_pval(vars_list):
     if len(vars_list) >= 8:
       k2, p = stats.normaltest(vars_list)
@@ -329,8 +317,8 @@ goldsteinDataAll.limit(5).toPandas()
 
 # COMMAND ----------
 
-goldsteinDataAll.select('ActionGeo_FullName','n_observations', 'if_normal_1d').filter(F.col('if_normal_1d') == False).show()
+goldsteinDataAll.select('ActionGeo_FullName','n_observations', 'if_normal_1d').filter(F.col('if_normal_1d') == False).count()
 
 # COMMAND ----------
 
-goldsteinDataAll.select('ActionGeo_FullName','n_observations','if_normal_60d').filter(F.col('if_normal_60d') == False).show()
+goldsteinDataAll.select('ActionGeo_FullName','n_observations','if_normal_60d').filter(F.col('if_normal_60d') == False).count()
