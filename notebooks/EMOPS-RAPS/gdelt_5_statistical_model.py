@@ -1,30 +1,19 @@
 # Databricks notebook source
 # MAGIC %md
 # MAGIC 
-# MAGIC ### After careful evaluation and verification, it has been established that none of the target variables are normally distributed. Thus, using the standard deviation of these variables would be insufficient for establishing a viable alert system. 
-# MAGIC 
-# MAGIC *New Methodology*
-# MAGIC - (1.0) Compute X day average for all the data values across all years (2019 to present, result will be X = [x1, x2, x3, ... xn]).
-# MAGIC - (2.0) Set a threshhold parameter z. // benchmark special parameter (needs to be established per country therefore there is need to come up with a "Ground Truth" value)
-# MAGIC - (3.0) For each value in X, compare with z. If X is greater than z, alert.
-# MAGIC - (4.0) Verify z threshold with past (known) data.
+# MAGIC ### After careful evaluation and verification, it has been established that none of the target variables are normally distributed. Thus, using the standard deviation of these variables would be insufficient for establishing a viable alert system. The new methodogy now involves creating an anomaly detection of target variables by calculating Median Absolute Deviation (MAD) of each variable for each period of analysis. 
 # MAGIC 
 # MAGIC %md 
-# MAGIC 
-# MAGIC ### Calculations – Distribution of Articles by Country by Event Type
-# MAGIC 
+# MAGIC ### Target Variable #1 – Distribution of Articles by Country by Event Type
 # MAGIC - 	Event report value (ERV): 
 # MAGIC Calculated as the distribution of articles with respect to an event type category per country per day
-# MAGIC -   Event report sum (ERS):
-# MAGIC <strike> Calculated as the number of articles categorized as belonging to a country that are categorized as matches for an event type </strike>
 # MAGIC -	Event Running Average 1 (ERA1):
 # MAGIC Calculated as the rolling **median** of the ERV for 3 days over the previous 12 months
 # MAGIC -	Event Running Average 2 (ERA2):
 # MAGIC Calculated as the rolling **median** of the ERV for 60 days over the previous 24 months
 # MAGIC 
 # MAGIC 
-# MAGIC ### Calculations – Averages of Goldstein Scores
-# MAGIC 
+# MAGIC ### Target Variable #2 – Medians of Goldstein Score Averages
 # MAGIC - 	Goldstein point value (GPV): 
 # MAGIC Calculated as the average Goldstein score for all articles with respect to an event type category per country per day
 # MAGIC -	Goldstein Running Average (GRA1):
@@ -32,8 +21,7 @@
 # MAGIC -	Goldstein Running Average (GRA2):
 # MAGIC Calculated as the rolling **median** of the GPV for 60 days over the previous 24 months
 # MAGIC 
-# MAGIC ### Calculations – Averages of Tone Scores
-# MAGIC 
+# MAGIC ### Target Variable #3 – Medians of Tone Score Averages
 # MAGIC - 	Tone point value (TPV): 
 # MAGIC Calculated as the average Mention Tone for all articles with respect to an event type category per country per day
 # MAGIC -	Tone Running Average (TRA1):
@@ -47,7 +35,12 @@
 # MAGIC - 60 days 
 # MAGIC 
 # MAGIC ### Premise of Task
-# MAGIC - Create anomaly detection of target variables by calculating Median Absolute Deviation (MAD) 
+# MAGIC - (1.0) Compute X day *median* for all the data values across all years (2019 to present, result will be X = [x1, x2, x3, ... xn]).
+# MAGIC - (2.0) Calculate the difference between X and the *daily median*.
+# MAGIC - (3.0) Calculate the *median* of the *differences* between X and the *daily median* [Median Absolute Deviation - MAD]
+# MAGIC - (4.0) Set a threshold parameter of 3x the MAD 
+# MAGIC - (5.0) Compare the *absolute* difference between X and the *daily median* with z. If X is greater than or equal to z, alert as an outlier.
+# MAGIC - (6.0) Verify z threshold with past (known) data.
 # MAGIC 
 # MAGIC Sources:
 # MAGIC - (1) [Median Absolute Deviation (MAD) with Apache Spark](https://www.advancinganalytics.co.uk/blog/2020/9/2/identifying-outliers-in-spark-30)
