@@ -202,7 +202,7 @@ targetOutputPartitioned = targetOutputPartitioned.withColumn('GRV_60d_list', F.c
 targetOutputPartitioned = targetOutputPartitioned.drop('GRV_1d_list','GRV_1d_diff_list','GRV_60d_list','GRV_60d_diff_list')
 
 # verify output data
-print((targetOutputPartitioned.count(), len(goldsteinOutputMedians.columns)))
+print((targetOutputPartitioned.count(), len(targetOutputPartitioned.columns)))
 targetOutputPartitioned.limit(1).toPandas()
 
 # COMMAND ----------
@@ -215,7 +215,7 @@ targetOutputPartitioned = targetOutputPartitioned.withColumn('TRV_1d_list', F.co
                                        .withColumn('TRV_1d_MAD', median_udf('TRV_1d_diff_list')) \
                                        .withColumn('TRV_1d_outlier', MAD_diff_udf(F.col('ToneReportValue'), F.col('TRV_1d_median'), F.col('TRV_1d_MAD')))
 # get rolling 60d median
-targetOutputPartitioned = targetOutputPartitioned.withColumn('TRV_60d_list', F.collect_list('ToneReportValue').over(rolling60d_window2)) \
+targetOutputPartitioned = targetOutputPartitioned.withColumn('TRV_60d_list', F.collect_list('ToneReportValue').over(rolling60d_window)) \
                                                  .withColumn('TRV_60d_median', median_udf('TRV_60d_list')) \
                                                  .withColumn('TRV_60d_diff_list', diff_udf(F.col('TRV_60d_median'), F.col('TRV_60d_list'))) \
                                                  .withColumn('TRV_60d_MAD', median_udf('TRV_60d_diff_list')) \
