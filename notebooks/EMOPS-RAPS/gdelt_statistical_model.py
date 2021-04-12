@@ -94,18 +94,14 @@ preprocessedGDELTcon40.limit(2).toPandas()
 # COMMAND ----------
 
 # DBTITLE 1,Create Initial Values of Target Variables
-# Create New Dataframe Column to Count Number of Daily Articles by Country by EventRootCode (and Lat/Long)
-targetOutput = preprocessedGDELTcon40.groupBy('ActionGeo_FullName','EventTimeDate','EventRootCodeString','ActionGeo_Lat','ActionGeo_Long') \
+# Create New Dataframe Column to Count Number of Daily Articles by Country by EventRootCode #,'ActionGeo_Lat','ActionGeo_Long'
+targetOutput = preprocessedGDELTcon40.groupBy('ActionGeo_FullName','EventTimeDate','EventRootCodeString') \
                                      .agg(F.avg('Confidence').alias('avgConfidence'),
                                           F.avg('GoldsteinScale').alias('GoldsteinReportValue'),
                                           F.avg('MentionDocTone').alias('ToneReportValue'),
                                           F.sum('nArticles').alias('nArticles'))
 print((targetOutput.count(), len(targetOutput.columns)))
 targetOutput.limit(2).toPandas()
-
-# COMMAND ----------
-
-
 
 # COMMAND ----------
 
