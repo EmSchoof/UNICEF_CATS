@@ -230,11 +230,80 @@ targetOutputPartitioned.limit(20).toPandas()
 
 # COMMAND ----------
 
-
-
-# COMMAND ----------
-
-
+# DBTITLE 1,Save Target Data as CSV
+targetOutputPartitioned.write.format('csv').option('header',True).mode('overwrite').option('sep',',').save('/Filestore/tables/tmp/gdelt/MAD_alertsystem_12april2021.csv')
 
 # COMMAND ----------
 
+AFG.columns
+
+# COMMAND ----------
+
+AFG = targetOutputPartitioned.filter(F.col('ActionGeo_FullName') == 'Afghanistan')
+
+# COMMAND ----------
+
+display(AFG)
+
+# COMMAND ----------
+
+groupCols = ['EventRootCodeString',
+             'ERV_3d_outlier','ERV_60d_outlier']
+
+AFG_E = AFG.select(groupCols) \
+           .groupBy(groupCols) \
+           .count() \
+           .orderBy('EventRootCodeString') \
+           .toPandas()
+
+#AFG_E.head(15)
+
+# COMMAND ----------
+
+display(AFG_E)
+
+# COMMAND ----------
+
+display(AFG_E)
+
+# COMMAND ----------
+
+groupCols = ['EventRootCodeString',
+             'GRV_1d_outlier','GRV_60d_outlier']
+
+AFG_G = AFG.select(groupCols) \
+           .groupBy(groupCols) \
+           .count() \
+           .orderBy('EventRootCodeString') \
+           .toPandas()
+
+#AFG_G.head(15)
+
+# COMMAND ----------
+
+display(AFG_G)
+
+# COMMAND ----------
+
+display(AFG_G)
+
+# COMMAND ----------
+
+groupCols = ['EventRootCodeString',
+             'TRV_1d_outlier','TRV_60d_outlier']
+
+AFG_T = AFG.select(groupCols) \
+           .groupBy(groupCols) \
+           .count() \
+           .orderBy('EventRootCodeString') \
+           .toPandas()
+
+#AFG_T.head(15)
+
+# COMMAND ----------
+
+display(AFG_T)
+
+# COMMAND ----------
+
+display(AFG_T)
