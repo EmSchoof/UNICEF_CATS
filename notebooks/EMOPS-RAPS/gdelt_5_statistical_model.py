@@ -9,21 +9,66 @@
 # MAGIC - (3.0) For each value in X, compare with z. If X is greater than z, alert.
 # MAGIC - (4.0) Verify z threshold with past (known) data.
 # MAGIC 
-# MAGIC *Execution of Methodology*
-# MAGIC - 1 - [create a list of 3 day moving averages from today - 365 days] // compare this list with defined 'z' anomalist behavior to the current 3 day average per EventRootCode
-# MAGIC - 2 - [create a list of 60 day moving averages from today - 730 days] // compare this list with defined 'z' anomalist behavior to the current 60 day average per EventRootCode
+# MAGIC %md 
+# MAGIC 
+# MAGIC ### Calculations – Distribution of Articles by Country by Event Type
+# MAGIC 
+# MAGIC - 	Event report value (ERV): 
+# MAGIC Calculated as the distribution of articles with respect to an event type category per country per day
+# MAGIC -   Event report sum (ERS):
+# MAGIC <strike> Calculated as the number of articles categorized as belonging to a country that are categorized as matches for an event type </strike>
+# MAGIC -	Event Running Average 1 (ERA1):
+# MAGIC Calculated as the rolling **median** of the ERV for 3 days over the previous 12 months
+# MAGIC -	Event Running Average 2 (ERA2):
+# MAGIC Calculated as the rolling **median** of the ERV for 60 days over the previous 24 months
+# MAGIC 
+# MAGIC 
+# MAGIC ### Calculations – Averages of Goldstein Scores
+# MAGIC 
+# MAGIC - 	Goldstein point value (GPV): 
+# MAGIC Calculated as the average Goldstein score for all articles with respect to an event type category per country per day
+# MAGIC -	Goldstein Running Average (GRA1):
+# MAGIC Calculated as the rolling **median** of the GPV for PA13 over the previous 12 months
+# MAGIC -	Goldstein Running Average (GRA2):
+# MAGIC Calculated as the rolling **median** of the GPV for 60 days over the previous 24 months
+# MAGIC 
+# MAGIC ### Calculations – Averages of Tone Scores
+# MAGIC 
+# MAGIC - 	Tone point value (TPV): 
+# MAGIC Calculated as the average Mention Tone for all articles with respect to an event type category per country per day
+# MAGIC -	Tone Running Average (TRA1):
+# MAGIC Calculated as the rolling **median** of the TPV for PA1 over the previous 12 months
+# MAGIC -	Tone Running Average (TRA2):
+# MAGIC Calculated as the rolling **median** of the TPV for 60 days over the previous 24 months
+# MAGIC 
+# MAGIC ### Periods of Analysis
+# MAGIC - 1 day
+# MAGIC - 3 days
+# MAGIC - 60 days 
+# MAGIC 
+# MAGIC ### Premise of Task
+# MAGIC - Create anomaly detection of target variables by calculating Median Absolute Deviation (MAD) 
+# MAGIC 
+# MAGIC Sources:
+# MAGIC - (1) [Median Absolute Deviation (MAD) with Apache Spark](https://www.advancinganalytics.co.uk/blog/2020/9/2/identifying-outliers-in-spark-30)
 
 # COMMAND ----------
 
 # DBTITLE 1,Import Modules
 import json
 import numpy as np
+import matplotlib.pyplot as plt
 import pandas as pd
 from pyspark.mllib.stat import Statistics
 from pyspark.sql import DataFrame
 import pyspark.sql.functions as F
 from pyspark.sql.types import *
 from pyspark.sql.window import Window
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC ### Part 1: Create Target Variables
 
 # COMMAND ----------
 
@@ -34,71 +79,61 @@ delimiter = ","
 
 # COMMAND ----------
 
-# DBTITLE 1,Import ERV Data
-eventReportValues = spark.read.format("csv") \
+# DBTITLE 1,Import Preprocessed Data
+# The applied options are for CSV files.  
+preprocessedGDELT = spark.read.format("csv") \
   .option("inferSchema", infer_schema) \
   .option("header", first_row_is_header) \
   .option("sep", delimiter) \
-  .load("/Filestore/tables/tmp/gdelt/erv_confidence40plus.csv") #
-print((eventReportValues.count(), len(eventReportValues.columns)))
-eventReportValues.limit(5).toPandas()
+  .load("/Filestore/tables/tmp/gdelt/preprocessed.csv")
+print((preprocessedGDELT.count(), len(preprocessedGDELT.columns)))
+preprocessedGDELT.limit(5).toPandas()
 
 # COMMAND ----------
 
-# DBTITLE 1,Import GRV Data
-# The applied options are for CSV files.  
-goldReportValues = spark.read.format("csv") \
-  .option("inferSchema", infer_schema) \
-  .option("header", first_row_is_header) \
-  .option("sep", delimiter) \
-  .load("/Filestore/tables/tmp/gdelt/grv_confidence40plus.csv") #
-print((goldReportValues.count(), len(goldReportValues.columns)))
-goldReportValues.limit(5).toPandas()
+# DBTITLE 1,Select Data with Confidence of 40% or higher
+# create confidence column of more than 
+print(preprocessedGDELT.count())
+preprocessedGDELTcon40 = preprocessedGDELT.filter(F.col('Confidence') >= 40)
+print(preprocessedGDELTcon40.count())
+preprocessedGDELTcon40.limit(2).toPandas()
 
 # COMMAND ----------
 
-# DBTITLE 1,Import TRV Data
-# The applied options are for CSV files.  
-toneReportValues = spark.read.format("csv") \
-  .option("inferSchema", infer_schema) \
-  .option("header", first_row_is_header) \
-  .option("sep", delimiter) \
-  .load("/Filestore/tables/tmp/gdelt/trv_confidence40plus.csv") #
-print((toneReportValues.count(), len(toneReportValues.columns)))
-toneReportValues.limit(5).toPandas()
+# DBTITLE 1,Create Initial Values of Target Variables
+# Create New Dataframe Column to Count Number of Daily Articles by Country by EventRootCode (and Lat/Long)
+targetOutput = preprocessedGDELTcon40.groupBy('ActionGeo_FullName','EventTimeDate','EventRootCodeString','ActionGeo_Lat','ActionGeo_Long') \
+                                     .agg(F.avg('Confidence').alias('avgConfidence'),
+                                          F.avg('GoldsteinScale').alias('GoldsteinReportValue'),
+                                          F.avg('MentionDocTone').alias('ToneReportValue'),
+                                          F.sum('nArticles').alias('nArticles'))
+print((targetOutput.count(), len(targetOutput.columns)))
+targetOutput.limit(2).toPandas()
+
+# COMMAND ----------
+
+
+
+# COMMAND ----------
+
+# create a Window, country by date
+countriesDaily_window = Window.partitionBy('EventTimeDate', 'ActionGeo_FullName').orderBy('EventTimeDate')
+
+# get daily distribution of articles for each Event Code string within Window
+targetOutputPartitioned = targetOutput.withColumn('EventReportValue', F.col('nArticles')/F.sum('nArticles').over(countriesDaily_window))
+targetOutputPartitioned.limit(2).toPandas()
+
+# COMMAND ----------
+
+# verify output
+sumERV = targetOutputPartitioned.select('EventTimeDate','ActionGeo_FullName','EventReportValue').groupBy('EventTimeDate', 'ActionGeo_FullName').agg(F.sum('EventReportValue'))
+print('Verify all sum(EventReportValue)s are 1')
+plt.plot(sumERV.select('sum(EventReportValue)').toPandas())
 
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ### Prework:
-# MAGIC #### Convert String Array Columns to Array Columns
-
-# COMMAND ----------
-
-def parse_embedding_from_string(x):
-    res = json.loads(x)
-    return res
-
-stripstring_udf = F.udf(parse_embedding_from_string, ArrayType(DoubleType()))
-
-# COMMAND ----------
-
-# ERV
-eventReportValues = eventReportValues.withColumn('ERV_3d_list', stripstring_udf(F.col('ERV_3d_list'))) \
-                                     .withColumn('ERV_60d_list', stripstring_udf(F.col('ERV_60d_list')))
-
-# GRV
-goldReportValues = goldReportValues.withColumn('GRV_1d_list', stripstring_udf(F.col('GRV_1d_list'))) \
-                                   .withColumn('GRV_60d_list', stripstring_udf(F.col('GRV_60d_list')))
-
-# TRV
-toneReportValues = toneReportValues.withColumn('TRV_1d_list',  stripstring_udf(F.col('TRV_1d_list'))) \
-                                   .withColumn('TRV_60d_list',  stripstring_udf(F.col('TRV_60d_list'))) \
-
-# COMMAND ----------
-
-# MAGIC %md
-# MAGIC ### Part 1:
+# MAGIC ### Part 2:
 # MAGIC #### Calculate Median Absolute Deviation (MAD) 
 # MAGIC 
 # MAGIC MAD is the difference between the value and the median.
@@ -110,35 +145,103 @@ toneReportValues = toneReportValues.withColumn('TRV_1d_list',  stripstring_udf(F
 
 # COMMAND ----------
 
-diff_udf = F.udf(lambda median, arr: [x - median for x in arr],
-                   ArrayType(DoubleType()))
-
-MAD_udf = F.udf(lambda arr: [ float(np.median(diff)) for diff in arr],
-                   ArrayType(DoubleType()))
-
-# COMMAND ----------
-
-eventReportValuesT = eventReportValues.withColumn('3d_diff', diff_udf(F.col('ERV_3d_median'), F.col('ERV_3d_list')))
-eventReportValuesT.limit(10).toPandas()
+# DBTITLE 1,UDF Functions
+median_udf = udf(lambda x: float(np.median(x)), FloatType())
+diff_udf = F.udf(lambda median, arr: [x - median for x in arr], ArrayType(FloatType()))
+MAD_diff_udf = F.udf(lambda x, median, mad: 'normal' if np.abs(x - median) <= (mad*3) else 'outlier', StringType())
 
 # COMMAND ----------
 
-MADdf = df.groupby('genre') \
-          .agg(F.expr('percentile(duration, array(0.5))')[0].alias('duration_median')) \
-          .join(df, "genre", "left") \
-          .withColumn("duration_difference_median", F.abs(F.col('duration')-F.col('duration_median'))) \
-          .groupby('genre', 'duration_median') \
-          .agg(F.expr('percentile(duration_difference_median, array(0.5))')[0].alias('median_absolute_difference'))
+# DBTITLE 1,Create Rolling Windows for Median
+# function to calculate number of seconds from number of days
+days = lambda i: i * 86400
 
-outliersremoved = df.join(MADdf, "genre", "left") \
-                    .filter(
-                           F.abs(F.col("duration")-F.col("duration_median")) <= (F.col("mean_absolute_difference")*3)
-                           )
+# create a 1 day Window, 1 day previous to the current day (row), using previous casting of timestamp to long (number of seconds)
+rolling1d_window = Window.partitionBy('ActionGeo_FullName', 'EventRootCodeString').orderBy(F.col('EventTimeDate').cast('timestamp').cast('long')).rangeBetween(-days(1), 0)
+
+# create a 3 day Window, 3 days days previous to the current day (row), using previous casting of timestamp to long (number of seconds)
+rolling3d_window = Window.partitionBy('ActionGeo_FullName', 'EventRootCodeString').orderBy(F.col('EventTimeDate').cast('timestamp').cast('long')).rangeBetween(-days(3), 0)
+
+# create a 60 day Window, 60 days days previous to the current day (row), using previous casting of timestamp to long (number of seconds)
+rolling60d_window = Window.partitionBy('ActionGeo_FullName', 'EventRootCodeString').orderBy(F.col('EventTimeDate').cast('timestamp').cast('long')).rangeBetween(-days(60), 0)
 
 # COMMAND ----------
 
-# MAGIC %md
-# MAGIC This method is generally more effective than standard deviation but it suffers from the opposite problem as it can be too aggressive in identifying values as outliers even though they are not really extremely different. For an extreme example: if more than 50% of the data points have the same value, MAD is computed to be 0, so any value different from the residual median is classified as an outlier.
+# DBTITLE 1,ERV Outlier Detection
+# get rolling 3d median
+targetOutputPartitioned = targetOutputPartitioned.withColumn('ERV_3d_list', F.collect_list('EventReportValue').over(rolling3d_window)) \
+                                                 .withColumn('ERV_3d_median', median_udf('ERV_3d_list')) \
+                                                 .withColumn('ERV_3d_diff_list', diff_udf(F.col('ERV_3d_median'), F.col('ERV_3d_list'))) \
+                                                 .withColumn('ERV_3d_MAD', median_udf('ERV_3d_diff_list')) \
+                                                 .withColumn('ERV_3d_outlier', MAD_diff_udf(F.col('EventReportValue'), F.col('ERV_3d_median'), F.col('ERV_3d_MAD')))
+
+# get rolling 60d median
+targetOutputPartitioned = targetOutputPartitioned.withColumn('ERV_60d_list', F.collect_list('EventReportValue').over(rolling60d_window)) \
+                                                 .withColumn('ERV_60d_median', median_udf('ERV_60d_list')) \
+                                                 .withColumn('ERV_60d_diff_list', diff_udf(F.col('ERV_60d_median'), F.col('ERV_60d_list'))) \
+                                                 .withColumn('ERV_60d_MAD', median_udf('ERV_60d_diff_list')) \
+                                                 .withColumn('ERV_60d_outlier', MAD_diff_udf(F.col('EventReportValue'), F.col('ERV_60d_median'), F.col('ERV_60d_MAD')))
+
+# drop extra columns
+targetOutputPartitioned = targetOutputPartitioned.drop('ERV_3d_list', 'ERV_3d_diff_list', 'ERV_60d_list', 'ERV_60d_diff_list')
+
+# verify output data
+print((targetOutputPartitioned.count(), len(targetOutputPartitioned.columns)))
+targetOutputPartitioned.limit(3).toPandas()
+
+# COMMAND ----------
+
+# DBTITLE 1,GRV Outlier Detection
+# get rolling 1d median
+targetOutputPartitioned = targetOutputPartitioned.withColumn('GRV_1d_list', F.collect_list('GoldsteinReportValue').over(rolling1d_window)) \
+                                                 .withColumn('GRV_1d_median', median_udf('GRV_1d_list')) \
+                                                 .withColumn('GRV_1d_diff_list', diff_udf(F.col('GRV_1d_median'), F.col('GRV_1d_list'))) \
+                                                 .withColumn('GRV_1d_MAD', median_udf('GRV_1d_diff_list')) \
+                                                 .withColumn('GRV_1d_outlier', MAD_diff_udf(F.col('GoldsteinReportValue'), F.col('GRV_1d_median'), F.col('GRV_1d_MAD')))
+# get rolling 60d median
+targetOutputPartitioned = targetOutputPartitioned.withColumn('GRV_60d_list', F.collect_list('GoldsteinReportValue').over(rolling60d_window)) \
+                                                 .withColumn('GRV_60d_median', median_udf('GRV_60d_list')) \
+                                                 .withColumn('GRV_60d_diff_list', diff_udf(F.col('GRV_60d_median'), F.col('GRV_60d_list'))) \
+                                                 .withColumn('GRV_60d_MAD', median_udf('GRV_60d_diff_list')) \
+                                                 .withColumn('GRV_60d_outlier', MAD_diff_udf(F.col('GoldsteinReportValue'), F.col('GRV_60d_median'), F.col('GRV_60d_MAD')))
+
+# drop extra columns
+targetOutputPartitioned = targetOutputPartitioned.drop('GRV_1d_list','GRV_1d_diff_list','GRV_60d_list','GRV_60d_diff_list')
+
+# verify output data
+print((targetOutputPartitioned.count(), len(goldsteinOutputMedians.columns)))
+targetOutputPartitioned.limit(1).toPandas()
+
+# COMMAND ----------
+
+# DBTITLE 1,TRV Outlier Detection
+# get rolling 1d median
+targetOutputPartitioned = targetOutputPartitioned.withColumn('TRV_1d_list', F.collect_list('ToneReportValue').over(rolling1d_window)) \
+                                       .withColumn('TRV_1d_median', median_udf('TRV_1d_list')) \
+                                       .withColumn('TRV_1d_diff_list', diff_udf(F.col('TRV_1d_median'), F.col('TRV_1d_list'))) \
+                                       .withColumn('TRV_1d_MAD', median_udf('TRV_1d_diff_list')) \
+                                       .withColumn('TRV_1d_outlier', MAD_diff_udf(F.col('ToneReportValue'), F.col('TRV_1d_median'), F.col('TRV_1d_MAD')))
+# get rolling 60d median
+targetOutputPartitioned = targetOutputPartitioned.withColumn('TRV_60d_list', F.collect_list('ToneReportValue').over(rolling60d_window2)) \
+                                                 .withColumn('TRV_60d_median', median_udf('TRV_60d_list')) \
+                                                 .withColumn('TRV_60d_diff_list', diff_udf(F.col('TRV_60d_median'), F.col('TRV_60d_list'))) \
+                                                 .withColumn('TRV_60d_MAD', median_udf('TRV_60d_diff_list')) \
+                                                 .withColumn('TRV_60d_outlier', MAD_diff_udf(F.col('ToneReportValue'), F.col('TRV_60d_median'), F.col('TRV_60d_MAD')))
+
+# drop extra columns
+targetOutputPartitioned = targetOutputPartitioned.drop('TRV_1d_list','TRV_1d_diff_list','TRV_60d_list','TRV_60d_diff_list')
+
+# verify output data
+print((targetOutputPartitioned.count(), len(targetOutputPartitioned.columns)))
+targetOutputPartitioned.limit(1).toPandas()
+
+# COMMAND ----------
+
+targetOutputPartitioned.limit(20).toPandas()
+
+# COMMAND ----------
+
+
 
 # COMMAND ----------
 
