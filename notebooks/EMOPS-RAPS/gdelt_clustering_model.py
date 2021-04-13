@@ -37,13 +37,13 @@
 # MAGIC ### Premise of Task
 # MAGIC - (1.0) Compute X day *median* for all the data values across all years (2019 to present, result will be X = [x1, x2, x3, ... xn]).
 # MAGIC - (2.0) Calculate the difference between X and the *daily median*.
-# MAGIC - (3.0) Calculate the *median* of the *differences* between X and the *daily median* [Median Absolute Deviation - MAD]
-# MAGIC - (4.0) Set a threshold parameter of 3x the MAD 
-# MAGIC - (5.0) Compare the *absolute* difference between X and the *daily median* with z. If X is greater than or equal to z, alert as an outlier.
-# MAGIC - (6.0) Verify z threshold with past (known) data.
+# MAGIC - (3.0) Set a threshold parameter z 
+# MAGIC - (4.0) Compare z and *daily median*. If X is greater than or equal to z, alert as an outlier.
+# MAGIC - (5.0) Verify z threshold with past (known) data.
 # MAGIC 
 # MAGIC Sources:
 # MAGIC - (1) [Facebook's Prophecy Forcesting Model](https://github.com/facebook/prophet/tree/master/python)
+# MAGIC   - (a) [Medium Example](https://towardsdatascience.com/a-quick-start-of-time-series-forecasting-with-a-practical-example-using-fb-prophet-31c4447a2274)
 # MAGIC - (2) [Understanding LSTM Recurrent Neural Network models](https://colah.github.io/posts/2015-08-Understanding-LSTMs/)
 
 # COMMAND ----------
