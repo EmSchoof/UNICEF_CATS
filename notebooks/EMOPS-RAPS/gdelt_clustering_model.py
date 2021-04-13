@@ -49,6 +49,8 @@
 # COMMAND ----------
 
 # DBTITLE 1,Import Modules
+from functools import reduce
+from itertools import chain
 import json
 import numpy as np
 import matplotlib.pyplot as plt
@@ -91,6 +93,60 @@ print(preprocessedGDELT.count())
 preprocessedGDELTcon40 = preprocessedGDELT.filter(F.col('Confidence') >= 40)
 print(preprocessedGDELTcon40.count())
 preprocessedGDELTcon40.limit(2).toPandas()
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC ### Count Number of Event Mentions per Country for the 4 months of Data
+
+# COMMAND ----------
+
+nEvents = preprocessedGDELTcon40.select('ActionGeo_FullName').groupBy('ActionGeo_FullName').count().orderBy('count').toPandas()
+
+# COMMAND ----------
+
+nEvents['count'].min(), nEvents['count'].max()
+
+# COMMAND ----------
+
+# MAGIC %md 
+# MAGIC ### Create Country Clusters (Based on UNICEF's "IOS Codes and Regions")
+
+# COMMAND ----------
+
+# source: country column
+unicef_countries = ["Afghanistan","Angola","Anguilla","Albania","United Arab Emirates","Argentina","Armenia","Antigua and Barbuda","Azerbaijan","Burundi","Benin","Burkina Faso","Bangladesh","Bulgaria","Bahrain","Bosnia-Herzegovina","Belarus","Belize","Bolivia","Brazil","Barbados","Bhutan","Botswana","Central African Republic","Chile","China","Côte d'Ivoire","Cameroon","DRC","ROC","Colombia","Comoros","Cape Verde","Costa Rica","Cuba","Djibouti","Dominica","Dominican Republic","Algeria","Ecuador","Egypt, Arab Rep.","Eritrea","Western Sahara","Ethiopia","Pacific Islands (Fiji)","Micronesia","Gabon","Georgia","Ghana","Guinea Conakry","Gambia, The","Guinea-Bissau","Equatorial Guinea","Grenada","Guatemala","Guyana","Honduras","Croatia","Haiti","Indonesia","India","Iran","Iraq","Jamaica","Jordan","Kazakhstan","Kenya","Kyrgyzstan","Cambodia","Kiribati","Saint Kitts and Nevis","Kuwait","Laos","Lebanon","Liberia","Libya","Saint Lucia","Sri Lanka","Lesotho","Morocco","Moldova","Madagascar","Maldives","Mexico","Marshall Islands","Macedonia","Mali","Myanmar","Montenegro","Mongolia","Mozambique","Mauritania","Montserrat","Malawi","Malaysia","Namibia","Niger","Nigeria","Nicaragua","Nepal ","Nauru","Oman","Pakistan","Panama","Peru","Philippines","Palau","Papua New Guinea","Korea, North","Paraguay","Palestine","Qatar","Kosovo","Romania","Rwanda","Saudi Arabia","Sudan","Senegal","Solomon Islands","Sierra Leone","El Salvador","Somalia","Serbia","South Sudan","Sao Tome and Principe","Suriname","Eswatini","Syria","Turks and Caicos","Chad","Togo","Thailand","Tajikistan","Tokelau","Turkmenistan","Timor-Leste","Tonga","Trinidad and Tobago", "Tunisia","Turkey","Tuvalu",
+"Tanzania","Uganda","Ukraine","Uruguay","Uzbekistan","Saint Vincent and the Grenadines","Venezuela","British Virgin Islands","Vietnam","Vanuatu","Samoa","Yemen","South Africa","Zambia","Zimbabwe"]
+
+# source: unicef region column
+unicef_region_ordered = ["ROSA", "ESARO", "LACRO", "ECARO", "MENARO", "LACRO", "ECARO", "LACRO", "ECARO", "ESARO", "WCARO", "WCARO", "ROSA", "ECARO", "MENARO", "WCARO", "ECARO", "LACRO", "LACRO", "LACRO", "LACRO", "ROSA", "ESARO", "WCARO", "LACRO", "EAPRO", "WCARO", "WCARO", "WCARO", "WCARO", "LACRO", "ESARO", "WCARO", "LACRO", "LACRO", "MENARO", "LACRO", "LACRO", "MENARO", "LACRO", "MENARO", "ESARO", "MENARO", "ESARO", "EAPRO", "EAPRO", "WCARO", "ECARO", "WCARO", "WCARO", "WCARO", "WCARO", "WCARO", "LACRO", "LACRO", "LACRO", "LACRO", "ECARO", "LACRO", "EAPRO", "ROSA", "MENARO", "MENARO", "LACRO", "MENARO", "ECARO", "ESARO", "ECARO", "EAPRO", "EAPRO", "LACRO", "MENARO", "EAPRO", "MENARO", "WCARO", "MENARO", "LACRO", "ROSA", "ESARO", "MENARO", "ECARO", "ESARO", "ROSA", "LACRO", "EAPRO", "ECARO", "WCARO", "EAPRO", "ECARO", "EAPRO", "ESARO", "WCARO", "LACRO", "ESARO", "EAPRO", "ESARO", "WCARO", "WCARO", "LACRO", "ROSA", "EAPRO", "MENARO", "ROSA", "LACRO", "LACRO", "EAPRO", "EAPRO", "EAPRO", "EAPRO", "LACRO", "MENARO", "MENARO", "ECARO", "ECARO", "ESARO", "MENARO", "MENARO", "WCARO", "EAPRO", "WCARO", "LACRO", "ESARO", "ECARO", "ESARO", "WCARO", "LACRO", "ESARO", "MENARO", "LACRO", "WCARO", "WCARO", "EAPRO", "ECARO", "EAPRO", "ECARO", "EAPRO", "EAPRO", "LACRO", "MENARO", "ECARO", "EAPRO", "ESARO", "ESARO", "ECARO", "LACRO", "ECARO", "LACRO", "LACRO", "LACRO", "EAPRO", "EAPRO", "EAPRO", "MENARO", "ESARO", "ESARO", "ESARO"]
+
+
+# Create Country: Country Region dictionary
+country_cluster_dict = dict(zip(unicef_countries, unicef_region_ordered))
+country_cluster_dict
+
+# COMMAND ----------
+
+# Map dictionary over df to create string column
+mapping_expr = F.create_map([F.lit(x) for x in chain(*country_cluster_dict.items())])
+clusteredCountries = preprocessedGDELTcon40.withColumn('UNICEF_regions', mapping_expr[F.col('ActionGeo_FullName')])
+clusteredCountries.limit(5).toPandas()
+
+# COMMAND ----------
+
+# DBTITLE 1,Separate Data for Countries with and without a Cluster
+countriesNoCluster = clusteredCountries.filter(F.col('UNICEF_regions').isNull())
+print(countriesNoCluster.count())
+countriesWithCluster = clusteredCountries.filter(~F.col('UNICEF_regions').isNull())
+print(countriesWithCluster.count())
+
+# COMMAND ----------
+
+# MAGIC %md 
+# MAGIC ### Create Target Variables
+# MAGIC - For countries without a cluster, create variables based on the Country
+# MAGIC - For countries with a cluster, create variables based on the Cluster
 
 # COMMAND ----------
 
