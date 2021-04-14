@@ -126,8 +126,6 @@ clusteredCountries.limit(5).toPandas()
 # COMMAND ----------
 
 # DBTITLE 1,Separate Data for Countries with and without a Cluster
-countriesNoCluster = clusteredCountries.filter(F.col('UNICEF_regions').isNull())
-print(countriesNoCluster.count())
 countriesWithCluster = clusteredCountries.filter(~F.col('UNICEF_regions').isNull())
 print(countriesWithCluster.count())
 
@@ -259,7 +257,7 @@ clustersMADs.limit(20).toPandas()
 countriesDaily_window = Window.partitionBy('EventTimeDate', 'ActionGeo_FullName').orderBy('EventTimeDate')
 
 # Create New Dataframe Column to Count Number of Daily Articles by Country by EventRootCode #,'ActionGeo_Lat','ActionGeo_Long'
-targetOutput = countriesNoCluster.groupBy('ActionGeo_FullName','EventTimeDate','EventRootCodeString') \
+targetOutput = clusteredCountries.groupBy('ActionGeo_FullName','EventTimeDate','EventRootCodeString') \
                                      .agg(F.avg('Confidence').alias('avgConfidence'),
                                           F.avg('GoldsteinScale').alias('GoldsteinReportValue'),
                                           F.avg('MentionDocTone').alias('ToneReportValue'),
@@ -289,8 +287,7 @@ targetOutputPartitioned = targetOutputPartitioned.withColumn('ERV_3d_list', F.co
                                                  .withColumn('ERV_60d_list', F.collect_list('EventReportValue').over(rolling60d_window)) \
                                                  .withColumn('ERV_60d_median', median_udf('ERV_60d_list'))  \
                                                  .withColumn('ERV_60d_diff_list', diff_udf(F.col('ERV_60d_median'), F.col('ERV_60d_list'))) \
-                                                 .withColumn('ERV_60d_MAD', median_udf('ERV_60d_diff_list')) \
-                                                 .withColumn('ERV_60d_outlier', MAD_diff_udf(F.col('EventReportValue'), F.col('ERV_60d_median'), F.col('ERV_60d_MAD')))
+                                                 .withColumn('ERV_60d_MAD', median_udf('ERV_60d_diff_list'))
 
 # Goldstein: 1d, 60d
 targetOutputPartitioned = targetOutputPartitioned.withColumn('GRV_1d_list', F.collect_list('GoldsteinReportValue').over(rolling1d_window)) \
@@ -301,8 +298,7 @@ targetOutputPartitioned = targetOutputPartitioned.withColumn('GRV_1d_list', F.co
                                                  .withColumn('GRV_60d_list', F.collect_list('GoldsteinReportValue').over(rolling60d_window)) \
                                                  .withColumn('GRV_60d_median', median_udf('GRV_60d_list')) \
                                                  .withColumn('GRV_60d_diff_list', diff_udf(F.col('GRV_60d_median'), F.col('GRV_60d_list'))) \
-                                                 .withColumn('GRV_60d_MAD', median_udf('GRV_60d_diff_list')) \
-                                                 .withColumn('GRV_60d_outlier', MAD_diff_udf(F.col('GoldsteinReportValue'), F.col('GRV_60d_median'), F.col('GRV_60d_MAD')))
+                                                 .withColumn('GRV_60d_MAD', median_udf('GRV_60d_diff_list'))
 
 # Tone: 1d, 60d
 targetOutputPartitioned = targetOutputPartitioned.withColumn('TRV_1d_list', F.collect_list('ToneReportValue').over(rolling1d_window)) \
@@ -313,8 +309,7 @@ targetOutputPartitioned = targetOutputPartitioned.withColumn('TRV_1d_list', F.co
                                                  .withColumn('TRV_60d_list', F.collect_list('ToneReportValue').over(rolling60d_window)) \
                                                  .withColumn('TRV_60d_median', median_udf('TRV_60d_list'))  \
                                                  .withColumn('TRV_60d_diff_list', diff_udf(F.col('TRV_60d_median'), F.col('TRV_60d_list'))) \
-                                                 .withColumn('TRV_60d_MAD', median_udf('TRV_60d_diff_list')) \
-                                                 .withColumn('TRV_60d_outlier', MAD_diff_udf(F.col('ToneReportValue'), F.col('TRV_60d_median'), F.col('TRV_60d_MAD')))
+                                                 .withColumn('TRV_60d_MAD', median_udf('TRV_60d_diff_list'))
 
 # drop extra columns
 targetOutputPartitioned = targetOutputPartitioned.drop('ERV_3d_list','ERV_3d_diff_list','ERV_60d_list','ERV_60d_diff_list',
@@ -327,7 +322,43 @@ targetOutputPartitioned.limit(3).toPandas()
 
 # COMMAND ----------
 
-targetOutputPartitioned.write.format('csv').option('header',True).mode('overwrite').option('sep',',').save('/Filestore/tables/tmp/gdelt/nocluster_MAD_alertsystem_13april2021.csv')
+# MAGIC %md
+# MAGIC #### If Country in Cluster, replace Country MAD with Cluster MAD (for date, eventcode)
+
+# COMMAND ----------
+
+targetOutputPartitioned = targetOutputPartitioned.withColumn('UNICEF_regions', F.lit(None))
+
+# COMMAND ----------
+
+# define columns for replacement
+cols_to_update = ['ERV_3d_MAD','ERV_60d_MAD','GRV_1d_MAD',
+                  'GRV_60d_MAD','TRV_1d_MAD', 'TRV_60d_MAD']
+all_cols = targetOutputPartitioned.drop(*cols_to_update).columns
+
+# replace MAD values for countries with a cluster
+countryClustersOutput = targetOutputPartitioned.alias('a') \
+                        .join(clustersMADs.alias('b'), on=['UNICEF_regions','EventTimeDate','EventRootCodeString'], how='left') \
+                        .select(
+                            *[
+                                [ F.when(~F.isnull(F.col('a.UNICEF_regions')), F.col('b.{}'.format(c))
+                                    ).otherwise(F.col('a.{}'.format(c))).alias(c)
+                                    for c in cols_to_update
+                                ]
+                            ]
+                        )
+
+# verify output data
+print((countryClustersOutput.count(), len(countryClustersOutput.columns)))
+countryClustersOutput.limit(3).toPandas()
+
+# COMMAND ----------
+
+
+
+# COMMAND ----------
+
+#targetOutputPartitioned.write.format('csv').option('header',True).mode('overwrite').option('sep',',').save('/Filestore/tables/tmp/gdelt/nocluster_MAD_alertsystem_13april2021.csv')
 
 # COMMAND ----------
 
@@ -339,8 +370,8 @@ targetOutputPartitioned.write.format('csv').option('header',True).mode('overwrit
 # COMMAND ----------
 
 # DBTITLE 1,Re Add Country Information
-.withColumn('GRV_60d_outlier', MAD_diff_udf(F.col('GoldsteinReportValue'), F.col('GRV_60d_median'), F.col('GRV_60d_MAD')))
-.withColumn('TRV_60d_outlier', MAD_diff_udf(F.col('ToneReportValue'), F.col('TRV_60d_median'), F.col('TRV_60d_MAD')))
+#.withColumn('GRV_60d_outlier', MAD_diff_udf(F.col('GoldsteinReportValue'), F.col('GRV_60d_median'), F.col('GRV_60d_MAD')))
+#.withColumn('TRV_60d_outlier', MAD_diff_udf(F.col('ToneReportValue'), F.col('TRV_60d_median'), F.col('TRV_60d_MAD')))
 
 # COMMAND ----------
 
