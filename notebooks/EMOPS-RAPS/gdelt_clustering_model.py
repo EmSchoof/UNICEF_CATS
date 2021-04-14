@@ -254,6 +254,10 @@ targetOutputPartitioned.limit(3).toPandas()
 
 # COMMAND ----------
 
+targetOutputPartitioned.write.format('csv').option('header',True).mode('overwrite').option('sep',',').save('/Filestore/tables/tmp/gdelt/nocluster_MAD_alertsystem_13april2021.csv')
+
+# COMMAND ----------
+
 # MAGIC %md
 # MAGIC #### Cluster (modified protocol)
 
@@ -334,4 +338,9 @@ targetOutputClustersPartitioned.limit(3).toPandas()
 
 # COMMAND ----------
 
-# DBTITLE 1,Create MAD Outlier Detection
+# DBTITLE 1,Re Add Country Information
+
+
+# COMMAND ----------
+
+#targetOutputClustersPartitioned.write.format('csv').option('header',True).mode('overwrite').option('sep',',').save('/Filestore/tables/tmp/gdelt/nocluster_MAD_alertsystem_13april2021.csv')
