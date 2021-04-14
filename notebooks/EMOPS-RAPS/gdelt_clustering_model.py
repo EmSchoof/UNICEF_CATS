@@ -142,7 +142,6 @@ print(countriesWithCluster.count())
 # DBTITLE 1,UDF Functions
 median_udf = udf(lambda x: float(np.median(x)), FloatType())
 diff_udf = F.udf(lambda median, arr: [x - median for x in arr], ArrayType(FloatType()))
-MAD_diff_udf = F.udf(lambda x, median, mad: 'normal' if np.abs(x - median) <= (mad*3) else 'outlier', StringType())
 
 # COMMAND ----------
 
@@ -334,12 +333,10 @@ targetOutputPartitioned = targetOutputPartitioned.withColumn('UNICEF_regions', F
 # define columns for replacement
 cols_to_update = ['ERV_3d_MAD','ERV_60d_MAD','GRV_1d_MAD',
                   'GRV_60d_MAD','TRV_1d_MAD', 'TRV_60d_MAD']
-all_cols = targetOutputPartitioned.drop(*cols_to_update).columns
 
 # replace MAD values for countries with a cluster
 countryClustersOutput = targetOutputPartitioned.alias('a') \
                         .join(clustersMADs.alias('b'), on=['UNICEF_regions','EventTimeDate','EventRootCodeString'], how='left') \
-                        .select(all_cols) \
                         .select(
                             *[
                                 [ F.when(~F.isnull(F.col('a.UNICEF_regions')), F.col('b.{}'.format(c))
@@ -347,11 +344,17 @@ countryClustersOutput = targetOutputPartitioned.alias('a') \
                                     for c in cols_to_update
                                 ]
                             ]
-                        )
+                        ) \
+                        .withColumn('id', F.monotonically_increasing_id())
+
+# merge dataframes
+all_cols = targetOutputPartitioned.drop(*cols_to_update).columns
+targetOutputPartitioned = targetOutputPartitioned.withColumn('id', F.monotonically_increasing_id())
+assessVariableOutliers = targetOutputPartitioned.select(*all_cols).join(countryClustersOutput, on='id', how='outer').drop('id')
 
 # verify output data
-print((countryClustersOutput.count(), len(countryClustersOutput.columns)))
-countryClustersOutput.limit(3).toPandas()
+print((assessVariableOutliers.count(), len(assessVariableOutliers.columns)))
+assessVariableOutliers.limit(3).toPandas()
 
 # COMMAND ----------
 
@@ -360,15 +363,27 @@ countryClustersOutput.limit(3).toPandas()
 
 # COMMAND ----------
 
-countryClustersOutput = countryClustersOutput.withColumn('ERV_3d_outlier', MAD_diff_udf(F.col('EventReportValue'), F.col('ERV_3d_median'), F.col('ERV_3d_MAD'))) \
-                                             .withColumn('ERV_60d_outlier', MAD_diff_udf(F.col('EventReportValue'), F.col('ERV_60d_median'), F.col('ERV_60d_MAD'))) \
-                                             .withColumn('GRV_1d_outlier', MAD_diff_udf(F.col('GoldsteinReportValue'), F.col('GRV_1d_median'), F.col('GRV_1d_MAD'))) \
-                                             .withColumn('GRV_60d_outlier', MAD_diff_udf(F.col('GoldsteinReportValue'), F.col('GRV_60d_median'), F.col('GRV_60d_MAD'))) \
-                                             .withColumn('TRV_1d_outlier', MAD_diff_udf(F.col('ToneReportValue'), F.col('TRV_1d_median'), F.col('TRV_1d_MAD'))) \
-                                             .withColumn('TRV_60d_outlier', MAD_diff_udf(F.col('ToneReportValue'), F.col('TRV_60d_median'), F.col('TRV_60d_MAD')))
+# define outlier UDF function
+MAD_diff_udf = F.udf(lambda x, median, mad: 'normal' if np.abs(x - median) <= (mad*3) else 'outlier', StringType())
+
+# identify outliers
+assessVariableOutliers = assessVariableOutliers.withColumn('ERV_3d_outlier', MAD_diff_udf(F.col('EventReportValue'), F.col('ERV_3d_median'), F.col('ERV_3d_MAD'))) \
+                                               .withColumn('ERV_60d_outlier', MAD_diff_udf(F.col('EventReportValue'), F.col('ERV_60d_median'), F.col('ERV_60d_MAD'))) \
+                                               .withColumn('GRV_1d_outlier', MAD_diff_udf(F.col('GoldsteinReportValue'), F.col('GRV_1d_median'), F.col('GRV_1d_MAD'))) \
+                                               .withColumn('GRV_60d_outlier', MAD_diff_udf(F.col('GoldsteinReportValue'), F.col('GRV_60d_median'), F.col('GRV_60d_MAD'))) \
+                                               .withColumn('TRV_1d_outlier', MAD_diff_udf(F.col('ToneReportValue'), F.col('TRV_1d_median'), F.col('TRV_1d_MAD'))) \
+                                               .withColumn('TRV_60d_outlier', MAD_diff_udf(F.col('ToneReportValue'), F.col('TRV_60d_median'), F.col('TRV_60d_MAD')))
 
 # verify output data
-print((countryClustersOutput.count(), len(countryClustersOutput.columns)))
+print((assessVariableOutliers.count(), len(assessVariableOutliers.columns)))
+assessVariableOutliers.select('ERV_3d_outlier','ERV_60d_outlier',
+                              'GRV_1d_outlier','GRV_60d_outlier',
+                              'TRV_1d_outlier','TRV_60d_outlier'
+                             ).limit(20).toPandas()
+
+# COMMAND ----------
+
+assessVariableOutliers.na.fill("").write.format('csv').option('header',True).mode('overwrite').option('sep',',').save('/Filestore/tables/tmp/gdelt/ALL_MAD_alertsystem_14april2021.csv')
 
 # COMMAND ----------
 
@@ -378,8 +393,8 @@ print((countryClustersOutput.count(), len(countryClustersOutput.columns)))
 # COMMAND ----------
 
 # Test output
-AFG = countryClustersOutput.filter(F.col('ActionGeo_FullName') == 'Afghanistan')
-display(AFG)
+AFG = assessVariableOutliers.filter(F.col('ActionGeo_FullName') == 'Afghanistan')
+AFG.limit(20).toPandas()
 
 # COMMAND ----------
 
@@ -416,4 +431,4 @@ display(AFG_T)
 
 # COMMAND ----------
 
-#targetOutputPartitioned.write.format('csv').option('header',True).mode('overwrite').option('sep',',').save('/Filestore/tables/tmp/gdelt/nocluster_MAD_alertsystem_13april2021.csv')
+AFG.na.fill("").write.format('csv').option('header',True).mode('overwrite').option('sep',',').save('/Filestore/tables/tmp/gdelt/AFG_MAD_alertsystem_14april2021.csv')
