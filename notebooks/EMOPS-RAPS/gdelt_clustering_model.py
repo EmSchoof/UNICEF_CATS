@@ -277,7 +277,7 @@ targetOutputPartitioned.limit(2).toPandas()
 
 # COMMAND ----------
 
-# DBTITLE 1,Create MAD Outlier Detection
+# DBTITLE 1,Create MAD Outlier Detection Values
 # Events: 3d, 60d
 targetOutputPartitioned = targetOutputPartitioned.withColumn('ERV_3d_list', F.collect_list('EventReportValue').over(rolling3d_window)) \
                                                  .withColumn('ERV_3d_median', median_udf('ERV_3d_list'))  \
@@ -339,6 +339,7 @@ all_cols = targetOutputPartitioned.drop(*cols_to_update).columns
 # replace MAD values for countries with a cluster
 countryClustersOutput = targetOutputPartitioned.alias('a') \
                         .join(clustersMADs.alias('b'), on=['UNICEF_regions','EventTimeDate','EventRootCodeString'], how='left') \
+                        .select(all_cols) \
                         .select(
                             *[
                                 [ F.when(~F.isnull(F.col('a.UNICEF_regions')), F.col('b.{}'.format(c))
@@ -354,25 +355,65 @@ countryClustersOutput.limit(3).toPandas()
 
 # COMMAND ----------
 
+# MAGIC %md
+# MAGIC #### Detect Outliers
 
+# COMMAND ----------
+
+countryClustersOutput = countryClustersOutput.withColumn('ERV_3d_outlier', MAD_diff_udf(F.col('EventReportValue'), F.col('ERV_3d_median'), F.col('ERV_3d_MAD'))) \
+                                             .withColumn('ERV_60d_outlier', MAD_diff_udf(F.col('EventReportValue'), F.col('ERV_60d_median'), F.col('ERV_60d_MAD'))) \
+                                             .withColumn('GRV_1d_outlier', MAD_diff_udf(F.col('GoldsteinReportValue'), F.col('GRV_1d_median'), F.col('GRV_1d_MAD'))) \
+                                             .withColumn('GRV_60d_outlier', MAD_diff_udf(F.col('GoldsteinReportValue'), F.col('GRV_60d_median'), F.col('GRV_60d_MAD'))) \
+                                             .withColumn('TRV_1d_outlier', MAD_diff_udf(F.col('ToneReportValue'), F.col('TRV_1d_median'), F.col('TRV_1d_MAD'))) \
+                                             .withColumn('TRV_60d_outlier', MAD_diff_udf(F.col('ToneReportValue'), F.col('TRV_60d_median'), F.col('TRV_60d_MAD')))
+
+# verify output data
+print((countryClustersOutput.count(), len(countryClustersOutput.columns)))
+
+# COMMAND ----------
+
+# MAGIC %md 
+# MAGIC #### Explore Output
+
+# COMMAND ----------
+
+# Test output
+AFG = countryClustersOutput.filter(F.col('ActionGeo_FullName') == 'Afghanistan')
+display(AFG)
+
+# COMMAND ----------
+
+groupCols = ['EventRootCodeString',
+             'ERV_3d_outlier','ERV_60d_outlier']
+AFG_E = AFG.select(groupCols) \
+           .groupBy(groupCols) \
+           .count() \
+           .orderBy('EventRootCodeString') \
+           .toPandas()
+display(AFG_E)
+
+# COMMAND ----------
+
+groupCols = ['EventRootCodeString',
+             'GRV_1d_outlier','GRV_60d_outlier']
+AFG_G = AFG.select(groupCols) \
+           .groupBy(groupCols) \
+           .count() \
+           .orderBy('EventRootCodeString') \
+           .toPandas()
+display(AFG_G)
+
+# COMMAND ----------
+
+groupCols = ['EventRootCodeString',
+             'TRV_1d_outlier','TRV_60d_outlier']
+AFG_T = AFG.select(groupCols) \
+           .groupBy(groupCols) \
+           .count() \
+           .orderBy('EventRootCodeString') \
+           .toPandas()
+display(AFG_T)
 
 # COMMAND ----------
 
 #targetOutputPartitioned.write.format('csv').option('header',True).mode('overwrite').option('sep',',').save('/Filestore/tables/tmp/gdelt/nocluster_MAD_alertsystem_13april2021.csv')
-
-# COMMAND ----------
-
-# verify output
-#sumERV = targetOutputClustersPartitioned.select('EventTimeDate','UNICEF_regions','EventReportValue').groupBy('EventTimeDate','UNICEF_regions').agg(F.sum('EventReportValue'))
-#print('Verify all sum(EventReportValue)s are 1')
-#plt.plot(sumERV.select('sum(EventReportValue)').toPandas())
-
-# COMMAND ----------
-
-# DBTITLE 1,Re Add Country Information
-#.withColumn('GRV_60d_outlier', MAD_diff_udf(F.col('GoldsteinReportValue'), F.col('GRV_60d_median'), F.col('GRV_60d_MAD')))
-#.withColumn('TRV_60d_outlier', MAD_diff_udf(F.col('ToneReportValue'), F.col('TRV_60d_median'), F.col('TRV_60d_MAD')))
-
-# COMMAND ----------
-
-#targetOutputClustersPartitioned.write.format('csv').option('header',True).mode('overwrite').option('sep',',').save('/Filestore/tables/tmp/gdelt/nocluster_MAD_alertsystem_13april2021.csv')
