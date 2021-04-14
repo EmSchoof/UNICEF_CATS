@@ -96,19 +96,6 @@ preprocessedGDELTcon40.limit(2).toPandas()
 
 # COMMAND ----------
 
-# MAGIC %md
-# MAGIC ### Count Number of Event Mentions per Country for the 4 months of Data
-
-# COMMAND ----------
-
-nEvents = preprocessedGDELTcon40.select('ActionGeo_FullName').groupBy('ActionGeo_FullName').count().orderBy('count').toPandas()
-
-# COMMAND ----------
-
-nEvents['count'].min(), nEvents['count'].max()
-
-# COMMAND ----------
-
 # MAGIC %md 
 # MAGIC ### Create Country Clusters (Based on UNICEF's "IOS Codes and Regions")
 
@@ -150,9 +137,50 @@ print(countriesWithCluster.count())
 
 # COMMAND ----------
 
+# DBTITLE 1,UDF Functions
+median_udf = udf(lambda x: float(np.median(x)), FloatType())
+diff_udf = F.udf(lambda median, arr: [x - median for x in arr], ArrayType(FloatType()))
+MAD_diff_udf = F.udf(lambda x, median, mad: 'normal' if np.abs(x - median) <= (mad*3) else 'outlier', StringType())
+
+# COMMAND ----------
+
+# DBTITLE 1,Create Rolling Windows for Median
+# function to calculate number of seconds from number of days
+days = lambda i: i * 86400
+
+# ---- NO CLUSTER ----
+
+# create a 1 day Window, 1 day previous to the current day (row), using previous casting of timestamp to long (number of seconds)
+rolling1d_window = Window.partitionBy('ActionGeo_FullName', 'EventRootCodeString').orderBy(F.col('EventTimeDate').cast('timestamp').cast('long')).rangeBetween(-days(1), 0)
+
+# create a 3 day Window, 3 days days previous to the current day (row), using previous casting of timestamp to long (number of seconds)
+rolling3d_window = Window.partitionBy('ActionGeo_FullName', 'EventRootCodeString').orderBy(F.col('EventTimeDate').cast('timestamp').cast('long')).rangeBetween(-days(3), 0)
+
+# create a 60 day Window, 60 days days previous to the current day (row), using previous casting of timestamp to long (number of seconds)
+rolling60d_window = Window.partitionBy('ActionGeo_FullName', 'EventRootCodeString').orderBy(F.col('EventTimeDate').cast('timestamp').cast('long')).rangeBetween(-days(60), 0)
+
+
+# ---- WITH CLUSTER ----
+
+# create a 1 day Window, 1 day previous to the current day (row), using previous casting of timestamp to long (number of seconds)
+rolling1dcluster_window = Window.partitionBy('UNICEF_regions', 'EventRootCodeString').orderBy(F.col('EventTimeDate').cast('timestamp').cast('long')).rangeBetween(-days(1), 0)
+
+# create a 3 day Window, 3 days days previous to the current day (row), using previous casting of timestamp to long (number of seconds)
+rolling3dcluster_window = Window.partitionBy('UNICEF_regions', 'EventRootCodeString').orderBy(F.col('EventTimeDate').cast('timestamp').cast('long')).rangeBetween(-days(3), 0)
+
+# create a 60 day Window, 60 days days previous to the current day (row), using previous casting of timestamp to long (number of seconds)
+rolling60dcluster_window = Window.partitionBy('UNICEF_regions', 'EventRootCodeString').orderBy(F.col('EventTimeDate').cast('timestamp').cast('long')).rangeBetween(-days(60), 0)
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC #### No Cluster (regular protocol)
+
+# COMMAND ----------
+
 # DBTITLE 1,Create Initial Values of Target Variables
 # Create New Dataframe Column to Count Number of Daily Articles by Country by EventRootCode #,'ActionGeo_Lat','ActionGeo_Long'
-targetOutput = preprocessedGDELTcon40.groupBy('ActionGeo_FullName','EventTimeDate','EventRootCodeString') \
+targetOutput = countriesNoCluster.groupBy('ActionGeo_FullName','EventTimeDate','EventRootCodeString') \
                                      .agg(F.avg('Confidence').alias('avgConfidence'),
                                           F.avg('GoldsteinScale').alias('GoldsteinReportValue'),
                                           F.avg('MentionDocTone').alias('ToneReportValue'),
@@ -172,57 +200,138 @@ targetOutputPartitioned.limit(2).toPandas()
 # COMMAND ----------
 
 # verify output
-sumERV = targetOutputPartitioned.select('EventTimeDate','ActionGeo_FullName','EventReportValue').groupBy('EventTimeDate', 'ActionGeo_FullName').agg(F.sum('EventReportValue'))
-print('Verify all sum(EventReportValue)s are 1')
-plt.plot(sumERV.select('sum(EventReportValue)').toPandas())
+#sumERV = targetOutputPartitioned.select('EventTimeDate','ActionGeo_FullName','EventReportValue').groupBy('EventTimeDate', 'ActionGeo_FullName').agg(F.sum('EventReportValue'))
+#print('Verify all sum(EventReportValue)s are 1')
+#plt.plot(sumERV.select('sum(EventReportValue)').toPandas())
 
 # COMMAND ----------
 
-# MAGIC %md
-# MAGIC ### Part 2:
-# MAGIC #### Create Model 
-
-# COMMAND ----------
-
-# DBTITLE 1,Create Rolling Windows for Median
-# function to calculate number of seconds from number of days
-days = lambda i: i * 86400
-
-# create a 1 day Window, 1 day previous to the current day (row), using previous casting of timestamp to long (number of seconds)
-rolling1d_window = Window.partitionBy('ActionGeo_FullName', 'EventRootCodeString').orderBy(F.col('EventTimeDate').cast('timestamp').cast('long')).rangeBetween(-days(1), 0)
-
-# create a 3 day Window, 3 days days previous to the current day (row), using previous casting of timestamp to long (number of seconds)
-rolling3d_window = Window.partitionBy('ActionGeo_FullName', 'EventRootCodeString').orderBy(F.col('EventTimeDate').cast('timestamp').cast('long')).rangeBetween(-days(3), 0)
-
-# create a 60 day Window, 60 days days previous to the current day (row), using previous casting of timestamp to long (number of seconds)
-rolling60d_window = Window.partitionBy('ActionGeo_FullName', 'EventRootCodeString').orderBy(F.col('EventTimeDate').cast('timestamp').cast('long')).rangeBetween(-days(60), 0)
-
-# COMMAND ----------
-
-# DBTITLE 1,Create Medians for Output Variables
+# DBTITLE 1,Create MAD Outlier Detection
 # Events: 3d, 60d
 targetOutputPartitioned = targetOutputPartitioned.withColumn('ERV_3d_list', F.collect_list('EventReportValue').over(rolling3d_window)) \
-                                                 .withColumn('ERV_3d_median', median_udf('ERV_3d_list')) \
+                                                 .withColumn('ERV_3d_median', median_udf('ERV_3d_list'))  \
+                                                 .withColumn('ERV_3d_diff_list', diff_udf(F.col('ERV_3d_median'), F.col('ERV_3d_list'))) \
+                                                 .withColumn('ERV_3d_MAD', median_udf('ERV_3d_diff_list')) \
+                                                 .withColumn('ERV_3d_outlier', MAD_diff_udf(F.col('EventReportValue'), F.col('ERV_3d_median'), F.col('ERV_3d_MAD'))) \
                                                  .withColumn('ERV_60d_list', F.collect_list('EventReportValue').over(rolling60d_window)) \
-                                                 .withColumn('ERV_60d_median', median_udf('ERV_60d_list')) 
+                                                 .withColumn('ERV_60d_median', median_udf('ERV_60d_list'))  \
+                                                 .withColumn('ERV_60d_diff_list', diff_udf(F.col('ERV_60d_median'), F.col('ERV_60d_list'))) \
+                                                 .withColumn('ERV_60d_MAD', median_udf('ERV_60d_diff_list')) \
+                                                 .withColumn('ERV_60d_outlier', MAD_diff_udf(F.col('EventReportValue'), F.col('ERV_60d_median'), F.col('ERV_60d_MAD')))
 
 # Goldstein: 1d, 60d
 targetOutputPartitioned = targetOutputPartitioned.withColumn('GRV_1d_list', F.collect_list('GoldsteinReportValue').over(rolling1d_window)) \
                                                  .withColumn('GRV_1d_median', median_udf('GRV_1d_list')) \
+                                                 .withColumn('GRV_1d_diff_list', diff_udf(F.col('GRV_1d_median'), F.col('GRV_1d_list'))) \
+                                                 .withColumn('GRV_1d_MAD', median_udf('GRV_1d_diff_list')) \
+                                                 .withColumn('GRV_1d_outlier', MAD_diff_udf(F.col('GoldsteinReportValue'), F.col('GRV_1d_median'), F.col('GRV_1d_MAD'))) \
                                                  .withColumn('GRV_60d_list', F.collect_list('GoldsteinReportValue').over(rolling60d_window)) \
-                                                 .withColumn('GRV_60d_median', median_udf('GRV_60d_list'))
+                                                 .withColumn('GRV_60d_median', median_udf('GRV_60d_list')) \
+                                                 .withColumn('GRV_60d_diff_list', diff_udf(F.col('GRV_60d_median'), F.col('GRV_60d_list'))) \
+                                                 .withColumn('GRV_60d_MAD', median_udf('GRV_60d_diff_list')) \
+                                                 .withColumn('GRV_60d_outlier', MAD_diff_udf(F.col('GoldsteinReportValue'), F.col('GRV_60d_median'), F.col('GRV_60d_MAD')))
 
 # Tone: 1d, 60d
 targetOutputPartitioned = targetOutputPartitioned.withColumn('TRV_1d_list', F.collect_list('ToneReportValue').over(rolling1d_window)) \
                                                  .withColumn('TRV_1d_median', median_udf('TRV_1d_list')) \
+                                                 .withColumn('TRV_1d_diff_list', diff_udf(F.col('TRV_1d_median'), F.col('TRV_1d_list'))) \
+                                                 .withColumn('TRV_1d_MAD', median_udf('TRV_1d_diff_list')) \
+                                                 .withColumn('TRV_1d_outlier', MAD_diff_udf(F.col('ToneReportValue'), F.col('TRV_1d_median'), F.col('TRV_1d_MAD'))) \
                                                  .withColumn('TRV_60d_list', F.collect_list('ToneReportValue').over(rolling60d_window)) \
-                                                 .withColumn('TRV_60d_median', median_udf('TRV_60d_list'))
+                                                 .withColumn('TRV_60d_median', median_udf('TRV_60d_list'))  \
+                                                 .withColumn('TRV_60d_diff_list', diff_udf(F.col('TRV_60d_median'), F.col('TRV_60d_list'))) \
+                                                 .withColumn('TRV_60d_MAD', median_udf('TRV_60d_diff_list')) \
+                                                 .withColumn('TRV_60d_outlier', MAD_diff_udf(F.col('ToneReportValue'), F.col('TRV_60d_median'), F.col('TRV_60d_MAD')))
 
 # drop extra columns
-targetOutputPartitioned = targetOutputPartitioned.drop('ERV_3d_list','ERV_60d_list',
-                                                       'GRV_1d_list', 'GRV_60d_list',
-                                                       'TRV_1d_list', 'TRV_60d_list')
+targetOutputPartitioned = targetOutputPartitioned.drop('ERV_3d_list','ERV_3d_diff_list','ERV_60d_list','ERV_60d_diff_list',
+                                                                       'GRV_1d_list','GRV_1d_diff_list','GRV_60d_list','GRV_60d_diff_list',
+                                                                       'TRV_1d_list','TRV_1d_diff_list','TRV_60d_list','TRV_60d_diff_list')
 
 # verify output data
 print((targetOutputPartitioned.count(), len(targetOutputPartitioned.columns)))
 targetOutputPartitioned.limit(3).toPandas()
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC #### Cluster (modified protocol)
+
+# COMMAND ----------
+
+# Create New Dataframe Column to Count Number of Daily Articles by Cluster by EventRootCode
+targetOutputClusters = countriesWithCluster.groupBy('UNICEF_regions','EventTimeDate','EventRootCodeString') \
+                                     .agg(F.avg('Confidence').alias('avgConfidence'),
+                                          F.avg('GoldsteinScale').alias('GoldsteinReportValue'),
+                                          F.avg('MentionDocTone').alias('ToneReportValue'),
+                                          F.sum('nArticles').alias('nArticles'))
+print((targetOutputClusters.count(), len(targetOutputClusters.columns)))
+targetOutputClusters.limit(2).toPandas()
+
+# COMMAND ----------
+
+# create a Window, cluster by date
+clusterDaily_window = Window.partitionBy('EventTimeDate','UNICEF_regions').orderBy('EventTimeDate')
+
+# get daily distribution of articles for each Event Code string within Window
+targetOutputClustersPartitioned = targetOutputClusters.withColumn('EventReportValue', F.col('nArticles')/F.sum('nArticles').over(clusterDaily_window))
+targetOutputClustersPartitioned.limit(2).toPandas()
+
+# COMMAND ----------
+
+# verify output
+#sumERV = targetOutputClustersPartitioned.select('EventTimeDate','UNICEF_regions','EventReportValue').groupBy('EventTimeDate','UNICEF_regions').agg(F.sum('EventReportValue'))
+#print('Verify all sum(EventReportValue)s are 1')
+#plt.plot(sumERV.select('sum(EventReportValue)').toPandas())
+
+# COMMAND ----------
+
+# DBTITLE 1,Create MAD Outlier Detection
+# Events: 3d, 60d
+targetOutputClustersPartitioned = targetOutputClustersPartitioned.withColumn('ERV_3d_list', F.collect_list('EventReportValue').over(rolling3dcluster_window)) \
+                                                 .withColumn('ERV_3d_median', median_udf('ERV_3d_list'))  \
+                                                 .withColumn('ERV_3d_diff_list', diff_udf(F.col('ERV_3d_median'), F.col('ERV_3d_list'))) \
+                                                 .withColumn('ERV_3d_MAD', median_udf('ERV_3d_diff_list')) \
+                                                 .withColumn('ERV_3d_outlier', MAD_diff_udf(F.col('EventReportValue'), F.col('ERV_3d_median'), F.col('ERV_3d_MAD'))) \
+                                                 .withColumn('ERV_60d_list', F.collect_list('EventReportValue').over(rolling60dcluster_window)) \
+                                                 .withColumn('ERV_60d_median', median_udf('ERV_60d_list'))  \
+                                                 .withColumn('ERV_60d_diff_list', diff_udf(F.col('ERV_60d_median'), F.col('ERV_60d_list'))) \
+                                                 .withColumn('ERV_60d_MAD', median_udf('ERV_60d_diff_list')) \
+                                                 .withColumn('ERV_60d_outlier', MAD_diff_udf(F.col('EventReportValue'), F.col('ERV_60d_median'), F.col('ERV_60d_MAD')))
+
+# Goldstein: 1d, 60d
+targetOutputClustersPartitioned = targetOutputClustersPartitioned.withColumn('GRV_1d_list', F.collect_list('GoldsteinReportValue').over(rolling1dcluster_window)) \
+                                                 .withColumn('GRV_1d_median', median_udf('GRV_1d_list')) \
+                                                 .withColumn('GRV_1d_diff_list', diff_udf(F.col('GRV_1d_median'), F.col('GRV_1d_list'))) \
+                                                 .withColumn('GRV_1d_MAD', median_udf('GRV_1d_diff_list')) \
+                                                 .withColumn('GRV_1d_outlier', MAD_diff_udf(F.col('GoldsteinReportValue'), F.col('GRV_1d_median'), F.col('GRV_1d_MAD'))) \
+                                                 .withColumn('GRV_60d_list', F.collect_list('GoldsteinReportValue').over(rolling60dcluster_window)) \
+                                                 .withColumn('GRV_60d_median', median_udf('GRV_60d_list')) \
+                                                 .withColumn('GRV_60d_diff_list', diff_udf(F.col('GRV_60d_median'), F.col('GRV_60d_list'))) \
+                                                 .withColumn('GRV_60d_MAD', median_udf('GRV_60d_diff_list')) \
+                                                 .withColumn('GRV_60d_outlier', MAD_diff_udf(F.col('GoldsteinReportValue'), F.col('GRV_60d_median'), F.col('GRV_60d_MAD')))
+
+# Tone: 1d, 60d
+targetOutputClustersPartitioned = targetOutputClustersPartitioned.withColumn('TRV_1d_list', F.collect_list('ToneReportValue').over(rolling1dcluster_window)) \
+                                                 .withColumn('TRV_1d_median', median_udf('TRV_1d_list')) \
+                                                 .withColumn('TRV_1d_diff_list', diff_udf(F.col('TRV_1d_median'), F.col('TRV_1d_list'))) \
+                                                 .withColumn('TRV_1d_MAD', median_udf('TRV_1d_diff_list')) \
+                                                 .withColumn('TRV_1d_outlier', MAD_diff_udf(F.col('ToneReportValue'), F.col('TRV_1d_median'), F.col('TRV_1d_MAD'))) \
+                                                 .withColumn('TRV_60d_list', F.collect_list('ToneReportValue').over(rolling60dcluster_window)) \
+                                                 .withColumn('TRV_60d_median', median_udf('TRV_60d_list'))  \
+                                                 .withColumn('TRV_60d_diff_list', diff_udf(F.col('TRV_60d_median'), F.col('TRV_60d_list'))) \
+                                                 .withColumn('TRV_60d_MAD', median_udf('TRV_60d_diff_list')) \
+                                                 .withColumn('TRV_60d_outlier', MAD_diff_udf(F.col('ToneReportValue'), F.col('TRV_60d_median'), F.col('TRV_60d_MAD')))
+
+# drop extra columns
+targetOutputClustersPartitioned = targetOutputClustersPartitioned.drop('ERV_3d_list','ERV_3d_diff_list','ERV_60d_list','ERV_60d_diff_list',
+                                                                       'GRV_1d_list','GRV_1d_diff_list','GRV_60d_list','GRV_60d_diff_list',
+                                                                       'TRV_1d_list','TRV_1d_diff_list','TRV_60d_list','TRV_60d_diff_list')
+
+# verify output data
+print((targetOutputClustersPartitioned.count(), len(targetOutputClustersPartitioned.columns)))
+targetOutputClustersPartitioned.limit(3).toPandas()
+
+# COMMAND ----------
+
+# DBTITLE 1,Create MAD Outlier Detection
