@@ -152,7 +152,6 @@ lowerQ_udf = F.udf(lambda x: float(np.quantile(x, 0.25)), FloatType())
 median_udf = F.udf(lambda x: float(np.quantile(x, 0.5)), FloatType())
 upperQ_udf = F.udf(lambda x: float(np.quantile(x, 0.75)), FloatType())
 quantileDeviation_udf = F.udf(lambda lowerQ, upperQ: (upperQ - lowerQ)/2, FloatType())
-outliers_udf = F.udf(lambda val, median, qdev: 'normal' if np.abs(val - median) >= (qdev*2.2) else 'outlier')
 
 # COMMAND ----------
 
@@ -400,7 +399,12 @@ assessVariableOutliers.select('ERV_3d_outlier','ERV_60d_outlier',
 
 # COMMAND ----------
 
-assessVariableOutliers.write.format('csv').option('header',True).mode('overwrite').option('sep',',').save('/Filestore/tables/tmp/gdelt/ALL_MAD_alertsystem_14april2021.csv')
+assessVariableOutliers.printSchema()
+
+# COMMAND ----------
+
+assessVariableOutliers = assessVariableOutliers.withColumn('UNICEF_regions', F.when(F.col('UNICEF_regions') == F.lit(None), '').otherwise(F.col('UNICEF_regions')))
+assessVariableOutliers.write.format('csv').option('header',True).mode('overwrite').option('sep',',').save('/Filestore/tables/tmp/gdelt/2_ALL_IQR_alertsystem_15april2021.csv')
 
 # COMMAND ----------
 
