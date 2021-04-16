@@ -126,6 +126,7 @@ clusteredCountries.limit(5).toPandas()
 # COMMAND ----------
 
 # DBTITLE 1,Separate Data for Countries with and without a Cluster
+# with
 countriesWithCluster = clusteredCountries.filter(~F.col('UNICEF_regions').isNull())
 print(countriesWithCluster.count())
 
@@ -197,7 +198,8 @@ targetOutputClusters = countriesWithCluster.groupBy('UNICEF_regions','EventTimeD
                                      .agg(F.avg('Confidence').alias('avgConfidence'),
                                           F.avg('GoldsteinScale').alias('GoldsteinReportValue'),
                                           F.avg('MentionDocTone').alias('ToneReportValue'),
-                                          F.sum('nArticles').alias('nArticles'))
+                                          F.sum('nArticles').alias('nArticles'),
+                                          F.collect_list('ActionGeo_FullName').alias('ActionGeo_FullName'))
 
 # get daily distribution of articles for each Event Code string within Window
 targetOutputClustersPartitioned = targetOutputClusters.withColumn('EventReportValue', F.col('nArticles')/F.sum('nArticles').over(clusterDaily_window))
@@ -244,7 +246,7 @@ targetOutputClustersPartitioned = targetOutputClustersPartitioned.withColumn('TR
                                                                  .withColumn('TRV_60d_qDeviation', quantileDeviation_udf(F.col('TRV_60d_quantile25'), F.col('TRV_60d_quantile75')))
 
 # select needed columns
-clustersQRs = targetOutputClustersPartitioned.select('UNICEF_regions','EventTimeDate','EventRootCodeString',
+clustersQRs = targetOutputClustersPartitioned.select('UNICEF_regions','EventTimeDate','EventRootCodeString','ActionGeo_FullName',
                                                       'ERV_3d_qDeviation','ERV_60d_qDeviation','ERV_3d_median','ERV_60d_median',
                                                       'GRV_1d_qDeviation','GRV_60d_qDeviation','GRV_1d_median','GRV_60d_median',
                                                       'TRV_1d_qDeviation', 'TRV_60d_qDeviation','TRV_1d_median', 'TRV_60d_median'
@@ -256,7 +258,12 @@ clustersQRs.limit(3).toPandas()
 
 # COMMAND ----------
 
-clustersQRs.limit(20).toPandas()
+# DBTITLE 1,Explode Dataframe by Country
+clustersQRs_exploded = clustersQRs.withColumn('ActionGeo_FullName', F.explode('ActionGeo_FullName'))
+
+# verify output data
+print((clustersQRs_exploded.count(), len(clustersQRs_exploded.columns)))
+clustersQRs_exploded.limit(3).toPandas()
 
 # COMMAND ----------
 
@@ -342,22 +349,18 @@ targetOutputPartitioned.limit(3).toPandas()
 
 # COMMAND ----------
 
-targetOutputPartitioned = targetOutputPartitioned.withColumn('id', F.monotonically_increasing_id())
-targetOutputPartitioned = targetOutputPartitioned.withColumn('UNICEF_regions', F.lit(None))
-
-# COMMAND ----------
-
 # define columns for replacement
 cols_to_update = ['ERV_3d_qDeviation','ERV_60d_qDeviation','ERV_3d_median','ERV_60d_median',
                   'GRV_1d_qDeviation','GRV_60d_qDeviation','GRV_1d_median','GRV_60d_median',
                   'TRV_1d_qDeviation', 'TRV_60d_qDeviation','TRV_1d_median', 'TRV_60d_median']
 
-# replace MAD values for countries with a cluster
-countryClustersOutput = targetOutputPartitioned.alias('a') \
-                        .join(clustersQRs.alias('b'), on=['UNICEF_regions','EventTimeDate','EventRootCodeString'], how='left') \
+# replace Median and Quantile Deviation values for countries with a cluster
+targetOutputPartitioned = targetOutputPartitioned.withColumn('id', F.monotonically_increasing_id())
+countryClustersUpdate = targetOutputPartitioned.alias('a') \
+                        .join(clustersQRs_exploded.alias('b'), on=['ActionGeo_FullName','EventTimeDate','EventRootCodeString'], how='left') \
                         .select(
                             *[
-                                [ F.when(~F.isnull(F.col('a.UNICEF_regions')), F.col('b.{}'.format(c))
+                                [ F.when(~F.isnull(F.col('b.UNICEF_regions')), F.col('b.{}'.format(c))
                                     ).otherwise(F.col('a.{}'.format(c))).alias(c)
                                     for c in cols_to_update
                                 ]
@@ -367,11 +370,15 @@ countryClustersOutput = targetOutputPartitioned.alias('a') \
 
 # merge dataframes
 all_cols = targetOutputPartitioned.drop(*cols_to_update).columns
-assessVariableOutliers = targetOutputPartitioned.select(*all_cols).join(countryClustersOutput, on='id', how='outer').drop('id')
+assessVariableOutliers = targetOutputPartitioned.select(*all_cols).join(countryClustersUpdate, on='id', how='outer').drop('id')
 
 # verify output data
 print((assessVariableOutliers.count(), len(assessVariableOutliers.columns)))
 assessVariableOutliers.limit(3).toPandas()
+
+# COMMAND ----------
+
+assessVariableOutliers.limit(20).toPandas()
 
 # COMMAND ----------
 
@@ -392,7 +399,8 @@ assessVariableOutliers = assessVariableOutliers.withColumn('ERV_3d_outlier', out
                                                .withColumn('TRV_60d_outlier', outliers_udf(F.col('ToneReportValue'), F.col('TRV_60d_median'), F.col('TRV_60d_qDeviation')))
 # verify output data
 print((assessVariableOutliers.count(), len(assessVariableOutliers.columns)))
-assessVariableOutliers.select('ERV_3d_outlier','ERV_60d_outlier',
+assessVariableOutliers.select('ActionGeo_FullName','EventTimeDate','EventRootCodeString',
+                              'ERV_3d_outlier','ERV_60d_outlier',
                               'GRV_1d_outlier','GRV_60d_outlier',
                               'TRV_1d_outlier','TRV_60d_outlier'
                              ).limit(20).toPandas()
@@ -403,8 +411,8 @@ assessVariableOutliers.printSchema()
 
 # COMMAND ----------
 
-assessVariableOutliers = assessVariableOutliers.withColumn('UNICEF_regions', F.when(F.col('UNICEF_regions') == F.lit(None), '').otherwise(F.col('UNICEF_regions')))
-assessVariableOutliers.write.format('csv').option('header',True).mode('overwrite').option('sep',',').save('/Filestore/tables/tmp/gdelt/2_ALL_IQR_alertsystem_15april2021.csv')
+#assessVariableOutliers = assessVariableOutliers.withColumn('UNICEF_regions', F.when(F.col('UNICEF_regions') == F.lit(None), '').otherwise(F.col('UNICEF_regions')))
+assessVariableOutliers.write.format('csv').option('header',True).mode('overwrite').option('sep',',').save('/Filestore/tables/tmp/gdelt/ALL_IQR_alertsystem_16april2021.csv')
 
 # COMMAND ----------
 
