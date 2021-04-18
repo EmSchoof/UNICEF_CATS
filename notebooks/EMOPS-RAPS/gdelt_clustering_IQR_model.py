@@ -185,31 +185,23 @@ print(countriesWithCluster.count())
 # MAGIC ### Create Target Variables
 # MAGIC - Calculate IQR for clusters 
 # MAGIC - Calculate IQR and IQR-Outlier for all countries
-# MAGIC - If country IN cluster, replace country MAD with cluster MAD (for date, eventcode)
-
-# COMMAND ----------
-
-# MAGIC %md
-# MAGIC 
-# MAGIC IQRdf = df.groupby('genre').agg(F.expr('percentile(duration, array(0.25))')[0].alias('lower_quartile'), F.expr('percentile(duration, array(0.75))')[0].alias('upper_quartile'), F.expr('percentile(duration, array(0.5))')[0].alias('duration_median')).withColumn("quartile_deviation", (F.col("upper_quartile") - F.col("lower_quartile"))/2)
-# MAGIC 
-# MAGIC outliersremoved = explodesplitdf.join(IQRdf, "genre", "left").filter(F.abs(F.col("duration")-F.col("duration_median")) >= (F.col("quartile_deviation")*2.2))
+# MAGIC - Calculate Power for Statistics
 
 # COMMAND ----------
 
 # DBTITLE 1,UDF Functions
+sampleN_udf = F.udf(lambda arr: len(arr), FloatType())
 lowerQ_udf = F.udf(lambda x: float(np.quantile(x, 0.25)), FloatType())
 median_udf = F.udf(lambda x: float(np.quantile(x, 0.5)), FloatType())
 upperQ_udf = F.udf(lambda x: float(np.quantile(x, 0.75)), FloatType())
-quantileDeviation_udf = F.udf(lambda lowerQ, upperQ: (upperQ - lowerQ)/2, FloatType())
+IQR_udf = F.udf(lambda lowerQ, upperQ: (upperQ - lowerQ), FloatType())
+quantileDeviation_udf = F.udf(lambda IQR: IQR/2, FloatType())
 
 # COMMAND ----------
 
 # DBTITLE 1,Create Rolling Windows
 # function to calculate number of seconds from number of days
 days = lambda i: i * 86400
-
-# ---- NO CLUSTER ----
 
 # create a 1 day Window, 1 day previous to the current day (row), using previous casting of timestamp to long (number of seconds)
 rolling1d_window = Window.partitionBy('ActionGeo_FullName', 'EventRootCodeString').orderBy(F.col('EventTimeDate').cast('timestamp').cast('long')).rangeBetween(-days(1), 0)
@@ -220,100 +212,6 @@ rolling3d_window = Window.partitionBy('ActionGeo_FullName', 'EventRootCodeString
 # create a 60 day Window, 60 days days previous to the current day (row), using previous casting of timestamp to long (number of seconds)
 rolling60d_window = Window.partitionBy('ActionGeo_FullName', 'EventRootCodeString').orderBy(F.col('EventTimeDate').cast('timestamp').cast('long')).rangeBetween(-days(60), 0)
 
-
-# ---- WITH CLUSTER ----
-
-# create a 1 day Window, 1 day previous to the current day (row), using previous casting of timestamp to long (number of seconds)
-rolling1dcluster_window = Window.partitionBy('UNICEF_regions', 'EventRootCodeString').orderBy(F.col('EventTimeDate').cast('timestamp').cast('long')).rangeBetween(-days(1), 0)
-
-# create a 3 day Window, 3 days days previous to the current day (row), using previous casting of timestamp to long (number of seconds)
-rolling3dcluster_window = Window.partitionBy('UNICEF_regions', 'EventRootCodeString').orderBy(F.col('EventTimeDate').cast('timestamp').cast('long')).rangeBetween(-days(3), 0)
-
-# create a 60 day Window, 60 days days previous to the current day (row), using previous casting of timestamp to long (number of seconds)
-rolling60dcluster_window = Window.partitionBy('UNICEF_regions', 'EventRootCodeString').orderBy(F.col('EventTimeDate').cast('timestamp').cast('long')).rangeBetween(-days(60), 0)
-
-# COMMAND ----------
-
-# MAGIC %md
-# MAGIC #### Cluster (modified protocol)
-
-# COMMAND ----------
-
-# create a Window, cluster by date
-clusterDaily_window = Window.partitionBy('UNICEF_regions','EventTimeDate').orderBy('EventTimeDate')
-
-# Create New Dataframe Column to Count Number of Daily Articles by Cluster by EventRootCode
-targetOutputClusters = countriesWithCluster.groupBy('UNICEF_regions','EventTimeDate','EventRootCodeString') \
-                                     .agg(F.avg('Confidence').alias('avgConfidence'),
-                                          F.avg('GoldsteinScale').alias('GoldsteinReportValue'),
-                                          F.avg('MentionDocTone').alias('ToneReportValue'),
-                                          F.sum('nArticles').alias('nArticles'),
-                                          F.collect_list('ActionGeo_FullName').alias('ActionGeo_FullName'))
-
-# get daily distribution of articles for each Event Code string within Window
-targetOutputClustersPartitioned = targetOutputClusters.withColumn('EventReportValue', F.col('nArticles')/F.sum('nArticles').over(clusterDaily_window))
-print((targetOutputClustersPartitioned.count(), len(targetOutputClustersPartitioned.columns)))
-targetOutputClustersPartitioned.limit(2).toPandas()
-
-# COMMAND ----------
-
-# DBTITLE 1,Calculate Cluster IQRs
-# Events: 3d, 60d
-targetOutputClustersPartitioned = targetOutputClustersPartitioned.withColumn('ERV_3d_list', F.collect_list('EventReportValue').over(rolling3dcluster_window)) \
-                                                                 .withColumn('ERV_3d_quantile25', lowerQ_udf('ERV_3d_list'))  \
-                                                                 .withColumn('ERV_3d_median', median_udf('ERV_3d_list'))  \
-                                                                 .withColumn('ERV_3d_quantile75', upperQ_udf('ERV_3d_list'))  \
-                                                                 .withColumn('ERV_3d_qDeviation', quantileDeviation_udf(F.col('ERV_3d_quantile25'), F.col('ERV_3d_quantile75')))  \
-                                                                 .withColumn('ERV_60d_list', F.collect_list('EventReportValue').over(rolling60dcluster_window)) \
-                                                                 .withColumn('ERV_60d_quantile25', lowerQ_udf('ERV_60d_list'))  \
-                                                                 .withColumn('ERV_60d_median', median_udf('ERV_60d_list'))  \
-                                                                 .withColumn('ERV_60d_quantile75', upperQ_udf('ERV_60d_list')) \
-                                                                 .withColumn('ERV_60d_qDeviation', quantileDeviation_udf(F.col('ERV_60d_quantile25'), F.col('ERV_60d_quantile75')))
-
-# Goldstein: 1d, 60d
-targetOutputClustersPartitioned = targetOutputClustersPartitioned.withColumn('GRV_1d_list', F.collect_list('GoldsteinReportValue').over(rolling1dcluster_window)) \
-                                                                 .withColumn('GRV_1d_quantile25', lowerQ_udf('GRV_1d_list'))  \
-                                                                 .withColumn('GRV_1d_median', median_udf('GRV_1d_list'))  \
-                                                                 .withColumn('GRV_1d_quantile75', upperQ_udf('GRV_1d_list'))  \
-                                                                 .withColumn('GRV_1d_qDeviation', quantileDeviation_udf(F.col('GRV_1d_quantile25'), F.col('GRV_1d_quantile75')))  \
-                                                                 .withColumn('GRV_60d_list', F.collect_list('EventReportValue').over(rolling60dcluster_window)) \
-                                                                 .withColumn('GRV_60d_quantile25', lowerQ_udf('GRV_60d_list'))  \
-                                                                 .withColumn('GRV_60d_median', median_udf('GRV_60d_list'))  \
-                                                                 .withColumn('GRV_60d_quantile75', upperQ_udf('GRV_60d_list')) \
-                                                                 .withColumn('GRV_60d_qDeviation', quantileDeviation_udf(F.col('GRV_60d_quantile25'), F.col('GRV_60d_quantile75')))
-
-# Tone: 1d, 60d
-targetOutputClustersPartitioned = targetOutputClustersPartitioned.withColumn('TRV_1d_list', F.collect_list('ToneReportValue').over(rolling1dcluster_window)) \
-                                                                 .withColumn('TRV_1d_quantile25', lowerQ_udf('TRV_1d_list'))  \
-                                                                 .withColumn('TRV_1d_median', median_udf('TRV_1d_list'))  \
-                                                                 .withColumn('TRV_1d_quantile75', upperQ_udf('TRV_1d_list'))  \
-                                                                 .withColumn('TRV_1d_qDeviation', quantileDeviation_udf(F.col('TRV_1d_quantile25'), F.col('TRV_1d_quantile75')))  \
-                                                                 .withColumn('TRV_60d_list', F.collect_list('EventReportValue').over(rolling60dcluster_window)) \
-                                                                 .withColumn('TRV_60d_quantile25', lowerQ_udf('TRV_60d_list'))  \
-                                                                 .withColumn('TRV_60d_median', median_udf('TRV_60d_list'))  \
-                                                                 .withColumn('TRV_60d_quantile75', upperQ_udf('TRV_60d_list')) \
-                                                                 .withColumn('TRV_60d_qDeviation', quantileDeviation_udf(F.col('TRV_60d_quantile25'), F.col('TRV_60d_quantile75')))
-
-# select needed columns
-clustersQRs = targetOutputClustersPartitioned.select('UNICEF_regions','EventTimeDate','EventRootCodeString','ActionGeo_FullName',
-                                                      'ERV_3d_qDeviation','ERV_60d_qDeviation','ERV_3d_median','ERV_60d_median',
-                                                      'GRV_1d_qDeviation','GRV_60d_qDeviation','GRV_1d_median','GRV_60d_median',
-                                                      'TRV_1d_qDeviation', 'TRV_60d_qDeviation','TRV_1d_median', 'TRV_60d_median'
-                                                      )
-
-# verify output data
-print((clustersQRs.count(), len(clustersQRs.columns)))
-clustersQRs.limit(3).toPandas()
-
-# COMMAND ----------
-
-# DBTITLE 1,Explode Dataframe by Country
-clustersQRs_exploded = clustersQRs.withColumn('ActionGeo_FullName', F.explode('ActionGeo_FullName'))
-
-# verify output data
-print((clustersQRs_exploded.count(), len(clustersQRs_exploded.columns)))
-clustersQRs_exploded.limit(3).toPandas()
-
 # COMMAND ----------
 
 # MAGIC %md
@@ -321,11 +219,26 @@ clustersQRs_exploded.limit(3).toPandas()
 
 # COMMAND ----------
 
-# DBTITLE 1,Create Initial Values of Target Variables
+F.skewness('wERA_3d'),
+                                              F.kurtosis('wERA_3d'),
+                                              F.stddev('wERA_3d'),
+                                              F.variance('wERA_3d'),
+                                              F.collect_list('wERA_3d').alias('list_wERA_3d'),
+                                              F.skewness('wERA_60d'),
+                                              F.kurtosis('wERA_60d'),
+                                              F.stddev('wERA_60d'),
+                                              F.variance('wERA_60d'),
+                                              F.collect_list('wERA_60d').alias('list_wERA_60d'),
+                                              F.sum('nArticles').alias('nArticles'),
+                                              F.count(F.lit(1)).alias('n_observations')
+
+# COMMAND ----------
+
+# DBTITLE 1,Create Initial Report Variables
 # create a Window, country by date
 countriesDaily_window = Window.partitionBy('ActionGeo_FullName','EventTimeDate').orderBy('EventTimeDate')
 
-# Create New Dataframe Column to Count Number of Daily Articles by Country by EventRootCode #,'ActionGeo_Lat','ActionGeo_Long'
+# Create New Dataframe Column to Count Number of Daily Articles by Country by EventRootCode
 targetOutput = clusteredCountries.groupBy('ActionGeo_FullName','EventTimeDate','EventRootCodeString') \
                                      .agg(F.avg('Confidence').alias('avgConfidence'),
                                           F.avg('GoldsteinScale').alias('GoldsteinReportValue'),
@@ -339,67 +252,89 @@ targetOutputPartitioned.limit(2).toPandas()
 
 # COMMAND ----------
 
-# verify output
-#sumERV = targetOutputPartitioned.select('EventTimeDate','ActionGeo_FullName','EventReportValue').groupBy('EventTimeDate', 'ActionGeo_FullName').agg(F.sum('EventReportValue'))
-#print('Verify all sum(EventReportValue)s are 1')
-#plt.plot(sumERV.select('sum(EventReportValue)').toPandas())
-
-# COMMAND ----------
-
-nlist_udf = F.udf(lambda arr: len(arr), FloatType())
-
-# COMMAND ----------
-
 # DBTITLE 1,Create IQR Values per Country per Date per Event Code
 # Events: 3d, 60d
 targetOutputPartitioned = targetOutputPartitioned.withColumn('ERV_3d_list', F.collect_list('EventReportValue').over(rolling3d_window)) \
-                                                 .withColumn('ERV_3d_sampleN', nlist_udf('ERV_3d_list'))  \
+                                                 .withColumn('ERV_3d_sampleN', sampleN_udf('ERV_3d_list'))  \
                                                  .withColumn('ERV_3d_quantile25', lowerQ_udf('ERV_3d_list'))  \
                                                  .withColumn('ERV_3d_median', median_udf('ERV_3d_list'))  \
                                                  .withColumn('ERV_3d_quantile75', upperQ_udf('ERV_3d_list'))  \
-                                                 .withColumn('ERV_3d_qDeviation', quantileDeviation_udf(F.col('ERV_3d_quantile25'), F.col('ERV_3d_quantile75')))  \
+                                                 .withColumn('ERV_3d_IQR', IQR_udf(F.col('ERV_3d_quantile25'), F.col('ERV_3d_quantile75')))  \
                                                  .withColumn('ERV_60d_list', F.collect_list('EventReportValue').over(rolling60d_window)) \
-                                                 .withColumn('ERV_60d_sampleN', nlist_udf('ERV_60d_list'))  \
+                                                 .withColumn('ERV_60d_sampleN', sampleN_udf('ERV_60d_list'))  \
                                                  .withColumn('ERV_60d_quantile25', lowerQ_udf('ERV_60d_list'))  \
                                                  .withColumn('ERV_60d_median', median_udf('ERV_60d_list'))  \
                                                  .withColumn('ERV_60d_quantile75', upperQ_udf('ERV_60d_list')) \
-                                                 .withColumn('ERV_60d_qDeviation', quantileDeviation_udf(F.col('ERV_60d_quantile25'), F.col('ERV_60d_quantile75')))
+                                                 .withColumn('ERV_60d_IQR', IQR_udf(F.col('ERV_60d_quantile25'), F.col('ERV_60d_quantile75')))
 
 # Goldstein: 1d, 60d
 targetOutputPartitioned = targetOutputPartitioned.withColumn('GRV_1d_list', F.collect_list('GoldsteinReportValue').over(rolling1d_window)) \
-                                                 .withColumn('GRV_1d_sampleN', nlist_udf('GRV_1d_list'))  \
+                                                 .withColumn('GRV_1d_sampleN', sampleN_udf('GRV_1d_list'))  \
                                                  .withColumn('GRV_1d_quantile25', lowerQ_udf('GRV_1d_list'))  \
                                                  .withColumn('GRV_1d_median', median_udf('GRV_1d_list'))  \
                                                  .withColumn('GRV_1d_quantile75', upperQ_udf('GRV_1d_list'))  \
-                                                 .withColumn('GRV_1d_qDeviation', quantileDeviation_udf(F.col('GRV_1d_quantile25'), F.col('GRV_1d_quantile75')))  \
+                                                 .withColumn('GRV_1d_IQR', IQR_udf(F.col('GRV_1d_quantile25'), F.col('GRV_1d_quantile75')))  \
                                                  .withColumn('GRV_60d_list', F.collect_list('EventReportValue').over(rolling60d_window)) \
-                                                 .withColumn('GRV_60d_sampleN', nlist_udf('GRV_60d_list'))  \
+                                                 .withColumn('GRV_60d_sampleN', sampleN_udf('GRV_60d_list'))  \
                                                  .withColumn('GRV_60d_quantile25', lowerQ_udf('GRV_60d_list'))  \
                                                  .withColumn('GRV_60d_median', median_udf('GRV_60d_list'))  \
                                                  .withColumn('GRV_60d_quantile75', upperQ_udf('GRV_60d_list')) \
-                                                 .withColumn('GRV_60d_qDeviation', quantileDeviation_udf(F.col('GRV_60d_quantile25'), F.col('GRV_60d_quantile75')))
+                                                 .withColumn('GRV_60d_IQR', IQR_udf(F.col('GRV_60d_quantile25'), F.col('GRV_60d_quantile75')))
 
 # Tone: 1d, 60d
 targetOutputPartitioned = targetOutputPartitioned.withColumn('TRV_1d_list', F.collect_list('ToneReportValue').over(rolling1d_window)) \
-                                                 .withColumn('TRV_1d_sampleN', nlist_udf('TRV_1d_list'))  \
+                                                 .withColumn('TRV_1d_sampleN', sampleN_udf('TRV_1d_list'))  \
                                                  .withColumn('TRV_1d_quantile25', lowerQ_udf('TRV_1d_list'))  \
                                                  .withColumn('TRV_1d_median', median_udf('TRV_1d_list'))  \
                                                  .withColumn('TRV_1d_quantile75', upperQ_udf('TRV_1d_list'))  \
-                                                 .withColumn('TRV_1d_qDeviation', quantileDeviation_udf(F.col('TRV_1d_quantile25'), F.col('TRV_1d_quantile75')))  \
+                                                 .withColumn('TRV_1d_IQR', IQR_udf(F.col('TRV_1d_quantile25'), F.col('TRV_1d_quantile75')))  \
                                                  .withColumn('TRV_60d_list', F.collect_list('EventReportValue').over(rolling60d_window)) \
-                                                 .withColumn('GRV_60d_sampleN', nlist_udf('GRV_60d_list'))  \
+                                                 .withColumn('TRV_60d_sampleN', sampleN_udf('TRV_60d_list'))  \
                                                  .withColumn('TRV_60d_quantile25', lowerQ_udf('TRV_60d_list'))  \
                                                  .withColumn('TRV_60d_median', median_udf('TRV_60d_list'))  \
                                                  .withColumn('TRV_60d_quantile75', upperQ_udf('TRV_60d_list')) \
-                                                 .withColumn('TRV_60d_qDeviation', quantileDeviation_udf(F.col('TRV_60d_quantile25'), F.col('TRV_60d_quantile75')))
-# drop extra columns
-targetOutputPartitioned = targetOutputPartitioned.drop('ERV_3d_list','ERV_3d_diff_list','ERV_60d_list','ERV_60d_diff_list',
-                                                       'GRV_1d_list','GRV_1d_diff_list','GRV_60d_list','GRV_60d_diff_list',
-                                                       'TRV_1d_list','TRV_1d_diff_list','TRV_60d_list','TRV_60d_diff_list')
+                                                 .withColumn('TRV_60d_IQR', IQR_udf(F.col('TRV_60d_quantile25'), F.col('TRV_60d_quantile75')))
+# select output columns
+targetOutputPartitioned = targetOutputPartitioned.select('ActionGeo_FullName','EventTimeDate','EventRootCodeString','avgConfidence','nArticles',
+                                                         'EventReportValue','ERV_3d_list','ERV_3d_sampleN','ERV_3d_median','ERV_3d_IQR',
+                                                         'ERV_60d_list','ERV_60d_sampleN','ERV_60d_median','ERV_60d_IQR',
+                                                         'GoldsteinReportValue','GRV_1d_list','GRV_1d_sampleN','GRV_1d_median','GRV_1d_IQR',
+                                                         'GRV_60d_list','GRV_60d_sampleN','GRV_60d_median','GRV_60d_IQR',
+                                                         'ToneReportValue','TRV_1d_list','TRV_1d_sampleN','TRV_1d_median','TRV_1d_IQR',
+                                                         'TRV_60d_list','TRV_60d_sampleN','TRV_60d_median','TRV_60d_IQR')
 
 # verify output data
 print((targetOutputPartitioned.count(), len(targetOutputPartitioned.columns)))
 targetOutputPartitioned.limit(3).toPandas()
+
+# COMMAND ----------
+
+# DBTITLE 1,Add Power for Non-Normally Distributed Variables
+# MAGIC %md
+# MAGIC #### [Power analysis](https://webpower.psychstat.org/wiki/_media/grant/du-zhang-yuan-2017.pdf) 
+# MAGIC 
+# MAGIC - Power Analysis is widely used for sample size determination (e.g., Cohen，1988). With appropriate power analysis, an adequate but not “too large” sample size is determined to detect an existing effect.
+# MAGIC - The **Monte Carlo simulation** is a method can flexibly take into account non-normality in one-sample t-test, two-sample t-test, and paired t-test, and unequal variances in two-sample t-test.
+
+# COMMAND ----------
+
+targetOutputPartitioned.columns
+
+# COMMAND ----------
+
+T = targetOutputPartitioned.select('ActionGeo_FullName','EventTimeDate','EventRootCodeString', 'ERV_3d_median').withColumn('ERV_3d_variance', F.variance('ERV_3d_median'))
+
+
+# COMMAND ----------
+
+# DBTITLE 1,Clean Up Dataframe and Add Variance
+select_cols =['ActionGeo_FullName','EventTimeDate','EventRootCodeString','avgConfidence','nArticles','EventReportValue','ERV_3d_median','ERV_3d_qDeviation', 'ERV_60d_median','ERV_60d_qDeviation','GoldsteinReportValue','GRV_1d_median','GRV_1d_qDeviation','GRV_60d_median','GRV_60d_qDeviation','ToneReportValue', 'TRV_1d_median','TRV_1d_qDeviation','TRV_60d_median','TRV_60d_qDeviation']
+
+targetOutputStatsMetrics = targetOutputPartitioned.select(select_cols) \
+                                                  .groupBy('ActionGeo_FullName','EventTimeDate','EventRootCodeString') \
+                                                  .agg( 
+                                                        F.count(F.lit(1)).alias('n_observations')
+                                                  )
 
 # COMMAND ----------
 
