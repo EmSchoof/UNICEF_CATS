@@ -47,6 +47,7 @@
 # COMMAND ----------
 
 # DBTITLE 1,Import Modules
+from operator import add
 from functools import reduce
 from itertools import chain
 import json
@@ -103,7 +104,7 @@ preprocessedGDELTcon40.limit(2).toPandas()
 # COMMAND ----------
 
 countCountryArticles = preprocessedGDELTcon40.select('ActionGeo_FullName','nArticles').groupBy('ActionGeo_FullName').sum().orderBy('sum(nArticles)')
-countCountryArticles.show(), countCountryArticles.tail()
+#countCountryArticles.show(), countCountryArticles.tail()
 
 # COMMAND ----------
 
@@ -143,41 +144,30 @@ print('Sample size/Number needed in each group: {:.3f}'.format(n))
 
 # COMMAND ----------
 
-# MAGIC %md 
-# MAGIC Since the Central Limit Theorem 
-
-# COMMAND ----------
-
-# MAGIC %md 
-# MAGIC ### Create Country Clusters (Based on UNICEF's "IOS Codes and Regions")
-
-# COMMAND ----------
-
+# Create Country Clusters (Based on UNICEF's "IOS Codes and Regions")
 # source: country column
-unicef_countries = ["Afghanistan","Angola","Anguilla","Albania","United Arab Emirates","Argentina","Armenia","Antigua and Barbuda","Azerbaijan","Burundi","Benin","Burkina Faso","Bangladesh","Bulgaria","Bahrain","Bosnia-Herzegovina","Belarus","Belize","Bolivia","Brazil","Barbados","Bhutan","Botswana","Central African Republic","Chile","China","Côte d'Ivoire","Cameroon","DRC","ROC","Colombia","Comoros","Cape Verde","Costa Rica","Cuba","Djibouti","Dominica","Dominican Republic","Algeria","Ecuador","Egypt, Arab Rep.","Eritrea","Western Sahara","Ethiopia","Pacific Islands (Fiji)","Micronesia","Gabon","Georgia","Ghana","Guinea Conakry","Gambia, The","Guinea-Bissau","Equatorial Guinea","Grenada","Guatemala","Guyana","Honduras","Croatia","Haiti","Indonesia","India","Iran","Iraq","Jamaica","Jordan","Kazakhstan","Kenya","Kyrgyzstan","Cambodia","Kiribati","Saint Kitts and Nevis","Kuwait","Laos","Lebanon","Liberia","Libya","Saint Lucia","Sri Lanka","Lesotho","Morocco","Moldova","Madagascar","Maldives","Mexico","Marshall Islands","Macedonia","Mali","Myanmar","Montenegro","Mongolia","Mozambique","Mauritania","Montserrat","Malawi","Malaysia","Namibia","Niger","Nigeria","Nicaragua","Nepal ","Nauru","Oman","Pakistan","Panama","Peru","Philippines","Palau","Papua New Guinea","Korea, North","Paraguay","Palestine","Qatar","Kosovo","Romania","Rwanda","Saudi Arabia","Sudan","Senegal","Solomon Islands","Sierra Leone","El Salvador","Somalia","Serbia","South Sudan","Sao Tome and Principe","Suriname","Eswatini","Syria","Turks and Caicos","Chad","Togo","Thailand","Tajikistan","Tokelau","Turkmenistan","Timor-Leste","Tonga","Trinidad and Tobago", "Tunisia","Turkey","Tuvalu",
-"Tanzania","Uganda","Ukraine","Uruguay","Uzbekistan","Saint Vincent and the Grenadines","Venezuela","British Virgin Islands","Vietnam","Vanuatu","Samoa","Yemen","South Africa","Zambia","Zimbabwe"]
+#unicef_countries = ["Afghanistan","Angola","Anguilla","Albania","United Arab Emirates","Argentina","Armenia","Antigua and Barbuda","Azerbaijan","Burundi","Benin","Burkina Faso","Bangladesh","Bulgaria","Bahrain","Bosnia-Herzegovina","Belarus","Belize","Bolivia","Brazil","Barbados","Bhutan","Botswana","Central African Republic","Chile","China","Côte d'Ivoire","Cameroon","DRC","ROC","Colombia","Comoros","Cape Verde","Costa Rica","Cuba","Djibouti","Dominica","Dominican Republic","Algeria","Ecuador","Egypt, Arab Rep.","Eritrea","Western Sahara","Ethiopia","Pacific Islands (Fiji)","Micronesia","Gabon","Georgia","Ghana","Guinea Conakry","Gambia, The","Guinea-Bissau","Equatorial Guinea","Grenada","Guatemala","Guyana","Honduras","Croatia","Haiti","Indonesia","India","Iran","Iraq","Jamaica","Jordan","Kazakhstan","Kenya","Kyrgyzstan","Cambodia","Kiribati","Saint Kitts and Nevis","Kuwait","Laos","Lebanon","Liberia","Libya","Saint Lucia","Sri Lanka","Lesotho","Morocco","Moldova","Madagascar","Maldives","Mexico","Marshall Islands","Macedonia","Mali","Myanmar","Montenegro","Mongolia","Mozambique","Mauritania","Montserrat","Malawi","Malaysia","Namibia","Niger","Nigeria","Nicaragua","Nepal ","Nauru","Oman","Pakistan","Panama","Peru","Philippines","Palau","Papua New Guinea","Korea, North","Paraguay","Palestine","Qatar","Kosovo","Romania","Rwanda","Saudi Arabia","Sudan","Senegal","Solomon Islands","Sierra Leone","El Salvador","Somalia","Serbia","South Sudan","Sao Tome and Principe","Suriname","Eswatini","Syria","Turks and Caicos","Chad","Togo","Thailand","Tajikistan","Tokelau","Turkmenistan","Timor-Leste","Tonga","Trinidad and Tobago", "Tunisia","Turkey","Tuvalu","Tanzania","Uganda","Ukraine","Uruguay","Uzbekistan","Saint Vincent and the Grenadines","Venezuela","British Virgin Islands","Vietnam","Vanuatu","Samoa","Yemen","South Africa","Zambia","Zimbabwe"]
 
 # source: unicef region column
-unicef_region_ordered = ["ROSA", "ESARO", "LACRO", "ECARO", "MENARO", "LACRO", "ECARO", "LACRO", "ECARO", "ESARO", "WCARO", "WCARO", "ROSA", "ECARO", "MENARO", "WCARO", "ECARO", "LACRO", "LACRO", "LACRO", "LACRO", "ROSA", "ESARO", "WCARO", "LACRO", "EAPRO", "WCARO", "WCARO", "WCARO", "WCARO", "LACRO", "ESARO", "WCARO", "LACRO", "LACRO", "MENARO", "LACRO", "LACRO", "MENARO", "LACRO", "MENARO", "ESARO", "MENARO", "ESARO", "EAPRO", "EAPRO", "WCARO", "ECARO", "WCARO", "WCARO", "WCARO", "WCARO", "WCARO", "LACRO", "LACRO", "LACRO", "LACRO", "ECARO", "LACRO", "EAPRO", "ROSA", "MENARO", "MENARO", "LACRO", "MENARO", "ECARO", "ESARO", "ECARO", "EAPRO", "EAPRO", "LACRO", "MENARO", "EAPRO", "MENARO", "WCARO", "MENARO", "LACRO", "ROSA", "ESARO", "MENARO", "ECARO", "ESARO", "ROSA", "LACRO", "EAPRO", "ECARO", "WCARO", "EAPRO", "ECARO", "EAPRO", "ESARO", "WCARO", "LACRO", "ESARO", "EAPRO", "ESARO", "WCARO", "WCARO", "LACRO", "ROSA", "EAPRO", "MENARO", "ROSA", "LACRO", "LACRO", "EAPRO", "EAPRO", "EAPRO", "EAPRO", "LACRO", "MENARO", "MENARO", "ECARO", "ECARO", "ESARO", "MENARO", "MENARO", "WCARO", "EAPRO", "WCARO", "LACRO", "ESARO", "ECARO", "ESARO", "WCARO", "LACRO", "ESARO", "MENARO", "LACRO", "WCARO", "WCARO", "EAPRO", "ECARO", "EAPRO", "ECARO", "EAPRO", "EAPRO", "LACRO", "MENARO", "ECARO", "EAPRO", "ESARO", "ESARO", "ECARO", "LACRO", "ECARO", "LACRO", "LACRO", "LACRO", "EAPRO", "EAPRO", "EAPRO", "MENARO", "ESARO", "ESARO", "ESARO"]
+#unicef_region_ordered = ["ROSA", "ESARO", "LACRO", "ECARO", "MENARO", "LACRO", "ECARO", "LACRO", "ECARO", "ESARO", "WCARO", "WCARO", "ROSA", "ECARO", "MENARO", "WCARO", "ECARO", "LACRO", "LACRO", "LACRO", "LACRO", "ROSA", "ESARO", "WCARO", "LACRO", "EAPRO", "WCARO", "WCARO", "WCARO", "WCARO", "LACRO", "ESARO", "WCARO", "LACRO", "LACRO", "MENARO", "LACRO", "LACRO", "MENARO", "LACRO", "MENARO", "ESARO", "MENARO", "ESARO", "EAPRO", "EAPRO", "WCARO", "ECARO", "WCARO", "WCARO", "WCARO", "WCARO", "WCARO", "LACRO", "LACRO", "LACRO", "LACRO", "ECARO", "LACRO", "EAPRO", "ROSA", "MENARO", "MENARO", "LACRO", "MENARO", "ECARO", "ESARO", "ECARO", "EAPRO", "EAPRO", "LACRO", "MENARO", "EAPRO", "MENARO", "WCARO", "MENARO", "LACRO", "ROSA", "ESARO", "MENARO", "ECARO", "ESARO", "ROSA", "LACRO", "EAPRO", "ECARO", "WCARO", "EAPRO", "ECARO", "EAPRO", "ESARO", "WCARO", "LACRO", "ESARO", "EAPRO", "ESARO", "WCARO", "WCARO", "LACRO", "ROSA", "EAPRO", "MENARO", "ROSA", "LACRO", "LACRO", "EAPRO", "EAPRO", "EAPRO", "EAPRO", "LACRO", "MENARO", "MENARO", "ECARO", "ECARO", "ESARO", "MENARO", "MENARO", "WCARO", "EAPRO", "WCARO", "LACRO", "ESARO", "ECARO", "ESARO", "WCARO", "LACRO", "ESARO", "MENARO", "LACRO", "WCARO", "WCARO", "EAPRO", "ECARO", "EAPRO", "ECARO", "EAPRO", "EAPRO", "LACRO", "MENARO", "ECARO", "EAPRO", "ESARO", "ESARO", "ECARO", "LACRO", "ECARO", "LACRO", "LACRO", "LACRO", "EAPRO", "EAPRO", "EAPRO", "MENARO", "ESARO", "ESARO", "ESARO"]
 
 
 # Create Country: Country Region dictionary
-country_cluster_dict = dict(zip(unicef_countries, unicef_region_ordered))
-country_cluster_dict
+#country_cluster_dict = dict(zip(unicef_countries, unicef_region_ordered))
+#country_cluster_dict
 
 # COMMAND ----------
 
 # Map dictionary over df to create string column
-mapping_expr = F.create_map([F.lit(x) for x in chain(*country_cluster_dict.items())])
-clusteredCountries = preprocessedGDELTcon40.withColumn('UNICEF_regions', mapping_expr[F.col('ActionGeo_FullName')])
-clusteredCountries.limit(5).toPandas()
+#mapping_expr = F.create_map([F.lit(x) for x in chain(*country_cluster_dict.items())])
+#clusteredCountries = preprocessedGDELTcon40.withColumn('UNICEF_regions', mapping_expr[F.col('ActionGeo_FullName')])
+#clusteredCountries.limit(5).toPandas()
 
 # COMMAND ----------
 
-# DBTITLE 1,Separate Data for Countries with and without a Cluster
-# with
-countriesWithCluster = clusteredCountries.filter(~F.col('UNICEF_regions').isNull())
-print(countriesWithCluster.count())
+#Separate Data for Countries with and without a Cluster
+#countriesWithCluster = clusteredCountries.filter(~F.col('UNICEF_regions').isNull())
+#print(countriesWithCluster.count())
 
 # COMMAND ----------
 
@@ -195,7 +185,9 @@ lowerQ_udf = F.udf(lambda x: float(np.quantile(x, 0.25)), FloatType())
 median_udf = F.udf(lambda x: float(np.quantile(x, 0.5)), FloatType())
 upperQ_udf = F.udf(lambda x: float(np.quantile(x, 0.75)), FloatType())
 IQR_udf = F.udf(lambda lowerQ, upperQ: (upperQ - lowerQ), FloatType())
-quantileDeviation_udf = F.udf(lambda IQR: IQR/2, FloatType())
+
+
+F.count(F.lit(1)).alias('n_observations')
 
 # COMMAND ----------
 
@@ -239,7 +231,7 @@ F.skewness('wERA_3d'),
 countriesDaily_window = Window.partitionBy('ActionGeo_FullName','EventTimeDate').orderBy('EventTimeDate')
 
 # Create New Dataframe Column to Count Number of Daily Articles by Country by EventRootCode
-targetOutput = clusteredCountries.groupBy('ActionGeo_FullName','EventTimeDate','EventRootCodeString') \
+targetOutput = preprocessedGDELTcon40.groupBy('ActionGeo_FullName','EventTimeDate','EventRootCodeString') \
                                      .agg(F.avg('Confidence').alias('avgConfidence'),
                                           F.avg('GoldsteinScale').alias('GoldsteinReportValue'),
                                           F.avg('MentionDocTone').alias('ToneReportValue'),
@@ -301,7 +293,8 @@ targetOutputPartitioned = targetOutputPartitioned.select('ActionGeo_FullName','E
                                                          'GoldsteinReportValue','GRV_1d_list','GRV_1d_sampleN','GRV_1d_median','GRV_1d_IQR',
                                                          'GRV_60d_list','GRV_60d_sampleN','GRV_60d_median','GRV_60d_IQR',
                                                          'ToneReportValue','TRV_1d_list','TRV_1d_sampleN','TRV_1d_median','TRV_1d_IQR',
-                                                         'TRV_60d_list','TRV_60d_sampleN','TRV_60d_median','TRV_60d_IQR')
+                                                         'TRV_60d_list','TRV_60d_sampleN','TRV_60d_median','TRV_60d_IQR') \
+                                                  .orderBy('EventTimeDate', ascending=False)
 
 # verify output data
 print((targetOutputPartitioned.count(), len(targetOutputPartitioned.columns)))
@@ -324,17 +317,6 @@ targetOutputPartitioned.columns
 
 T = targetOutputPartitioned.select('ActionGeo_FullName','EventTimeDate','EventRootCodeString', 'ERV_3d_median').withColumn('ERV_3d_variance', F.variance('ERV_3d_median'))
 
-
-# COMMAND ----------
-
-# DBTITLE 1,Clean Up Dataframe and Add Variance
-select_cols =['ActionGeo_FullName','EventTimeDate','EventRootCodeString','avgConfidence','nArticles','EventReportValue','ERV_3d_median','ERV_3d_qDeviation', 'ERV_60d_median','ERV_60d_qDeviation','GoldsteinReportValue','GRV_1d_median','GRV_1d_qDeviation','GRV_60d_median','GRV_60d_qDeviation','ToneReportValue', 'TRV_1d_median','TRV_1d_qDeviation','TRV_60d_median','TRV_60d_qDeviation']
-
-targetOutputStatsMetrics = targetOutputPartitioned.select(select_cols) \
-                                                  .groupBy('ActionGeo_FullName','EventTimeDate','EventRootCodeString') \
-                                                  .agg( 
-                                                        F.count(F.lit(1)).alias('n_observations')
-                                                  )
 
 # COMMAND ----------
 
@@ -379,6 +361,21 @@ targetOutputStatsMetrics = targetOutputPartitioned.select(select_cols) \
 
 # MAGIC %md
 # MAGIC #### Detect Outliers
+
+# COMMAND ----------
+
+def get_upper_outliers(val, upperQ, IQR):
+  mild_upper_outlier = upperQ + (IQR*1.5)
+  extreme_upper_outlier = upperQ + (IQR*3)
+  
+  if (val >= mild_upper_outlier) and (val <= extreme_mild_outlier) :
+    return 'mild upper outlier'
+  elif (val >= extreme_upper_outlier):
+    return 'extreme upper outlier'
+  else:
+    return 'not upper outlier'
+
+upperOutlier_udf = F.udf(lambda val, upperQ, IQR: get_upper_outliers(val, upperQ, IQR), StringType())
 
 # COMMAND ----------
 
