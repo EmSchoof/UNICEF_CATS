@@ -98,39 +98,6 @@ preprocessedGDELTcon40.limit(2).toPandas()
 
 # COMMAND ----------
 
-# Count Event Articles by Country
-#countCountryArticles = preprocessedGDELTcon40.select('ActionGeo_FullName','nArticles').groupBy('ActionGeo_FullName').sum().orderBy('sum(nArticles)')
-#countCountryArticles.show(), countCountryArticles.tail()
-
-# COMMAND ----------
-
-# Create Country Clusters (Based on UNICEF's "IOS Codes and Regions")
-# source: country column
-#unicef_countries = ["Afghanistan","Angola","Anguilla","Albania","United Arab Emirates","Argentina","Armenia","Antigua and Barbuda","Azerbaijan","Burundi","Benin","Burkina Faso","Bangladesh","Bulgaria","Bahrain","Bosnia-Herzegovina","Belarus","Belize","Bolivia","Brazil","Barbados","Bhutan","Botswana","Central African Republic","Chile","China","Côte d'Ivoire","Cameroon","DRC","ROC","Colombia","Comoros","Cape Verde","Costa Rica","Cuba","Djibouti","Dominica","Dominican Republic","Algeria","Ecuador","Egypt, Arab Rep.","Eritrea","Western Sahara","Ethiopia","Pacific Islands (Fiji)","Micronesia","Gabon","Georgia","Ghana","Guinea Conakry","Gambia, The","Guinea-Bissau","Equatorial Guinea","Grenada","Guatemala","Guyana","Honduras","Croatia","Haiti","Indonesia","India","Iran","Iraq","Jamaica","Jordan","Kazakhstan","Kenya","Kyrgyzstan","Cambodia","Kiribati","Saint Kitts and Nevis","Kuwait","Laos","Lebanon","Liberia","Libya","Saint Lucia","Sri Lanka","Lesotho","Morocco","Moldova","Madagascar","Maldives","Mexico","Marshall Islands","Macedonia","Mali","Myanmar","Montenegro","Mongolia","Mozambique","Mauritania","Montserrat","Malawi","Malaysia","Namibia","Niger","Nigeria","Nicaragua","Nepal ","Nauru","Oman","Pakistan","Panama","Peru","Philippines","Palau","Papua New Guinea","Korea, North","Paraguay","Palestine","Qatar","Kosovo","Romania","Rwanda","Saudi Arabia","Sudan","Senegal","Solomon Islands","Sierra Leone","El Salvador","Somalia","Serbia","South Sudan","Sao Tome and Principe","Suriname","Eswatini","Syria","Turks and Caicos","Chad","Togo","Thailand","Tajikistan","Tokelau","Turkmenistan","Timor-Leste","Tonga","Trinidad and Tobago", "Tunisia","Turkey","Tuvalu","Tanzania","Uganda","Ukraine","Uruguay","Uzbekistan","Saint Vincent and the Grenadines","Venezuela","British Virgin Islands","Vietnam","Vanuatu","Samoa","Yemen","South Africa","Zambia","Zimbabwe"]
-
-# source: unicef region column
-#unicef_region_ordered = ["ROSA", "ESARO", "LACRO", "ECARO", "MENARO", "LACRO", "ECARO", "LACRO", "ECARO", "ESARO", "WCARO", "WCARO", "ROSA", "ECARO", "MENARO", "WCARO", "ECARO", "LACRO", "LACRO", "LACRO", "LACRO", "ROSA", "ESARO", "WCARO", "LACRO", "EAPRO", "WCARO", "WCARO", "WCARO", "WCARO", "LACRO", "ESARO", "WCARO", "LACRO", "LACRO", "MENARO", "LACRO", "LACRO", "MENARO", "LACRO", "MENARO", "ESARO", "MENARO", "ESARO", "EAPRO", "EAPRO", "WCARO", "ECARO", "WCARO", "WCARO", "WCARO", "WCARO", "WCARO", "LACRO", "LACRO", "LACRO", "LACRO", "ECARO", "LACRO", "EAPRO", "ROSA", "MENARO", "MENARO", "LACRO", "MENARO", "ECARO", "ESARO", "ECARO", "EAPRO", "EAPRO", "LACRO", "MENARO", "EAPRO", "MENARO", "WCARO", "MENARO", "LACRO", "ROSA", "ESARO", "MENARO", "ECARO", "ESARO", "ROSA", "LACRO", "EAPRO", "ECARO", "WCARO", "EAPRO", "ECARO", "EAPRO", "ESARO", "WCARO", "LACRO", "ESARO", "EAPRO", "ESARO", "WCARO", "WCARO", "LACRO", "ROSA", "EAPRO", "MENARO", "ROSA", "LACRO", "LACRO", "EAPRO", "EAPRO", "EAPRO", "EAPRO", "LACRO", "MENARO", "MENARO", "ECARO", "ECARO", "ESARO", "MENARO", "MENARO", "WCARO", "EAPRO", "WCARO", "LACRO", "ESARO", "ECARO", "ESARO", "WCARO", "LACRO", "ESARO", "MENARO", "LACRO", "WCARO", "WCARO", "EAPRO", "ECARO", "EAPRO", "ECARO", "EAPRO", "EAPRO", "LACRO", "MENARO", "ECARO", "EAPRO", "ESARO", "ESARO", "ECARO", "LACRO", "ECARO", "LACRO", "LACRO", "LACRO", "EAPRO", "EAPRO", "EAPRO", "MENARO", "ESARO", "ESARO", "ESARO"]
-
-
-# Create Country: Country Region dictionary
-#country_cluster_dict = dict(zip(unicef_countries, unicef_region_ordered))
-#country_cluster_dict
-
-# COMMAND ----------
-
-# Map dictionary over df to create string column
-#mapping_expr = F.create_map([F.lit(x) for x in chain(*country_cluster_dict.items())])
-#clusteredCountries = preprocessedGDELTcon40.withColumn('UNICEF_regions', mapping_expr[F.col('ActionGeo_FullName')])
-#clusteredCountries.limit(5).toPandas()
-
-# COMMAND ----------
-
-#Separate Data for Countries with and without a Cluster
-#countriesWithCluster = clusteredCountries.filter(~F.col('UNICEF_regions').isNull())
-#print(countriesWithCluster.count())
-
-# COMMAND ----------
-
 # MAGIC %md 
 # MAGIC ### Create Target Variables
 # MAGIC - Calculate IQR for clusters 
@@ -277,45 +244,6 @@ targetOutputTimelines = targetOutputTimelines.withColumn('TRV_1d_12month_list', 
 # verify output data
 print((targetOutputTimelines.count(), len(targetOutputTimelines.columns)))
 targetOutputTimelines.limit(3).toPandas()
-
-# COMMAND ----------
-
-# MAGIC %md
-# MAGIC #### If Country in Cluster, replace Country IQR Values with Cluster IQR values (for date, eventcode)
-
-# COMMAND ----------
-
-# MAGIC %md 
-# MAGIC # define columns for replacement
-# MAGIC cols_to_update = ['ERV_3d_qDeviation','ERV_60d_qDeviation','ERV_3d_median','ERV_60d_median',
-# MAGIC                   'GRV_1d_qDeviation','GRV_60d_qDeviation','GRV_1d_median','GRV_60d_median',
-# MAGIC                   'TRV_1d_qDeviation', 'TRV_60d_qDeviation','TRV_1d_median', 'TRV_60d_median']
-# MAGIC 
-# MAGIC # replace Median and Quantile Deviation values for countries with a cluster
-# MAGIC targetOutputPartitioned = targetOutputPartitioned.withColumn('id', F.monotonically_increasing_id())
-# MAGIC countryClustersUpdate = targetOutputPartitioned.alias('a') \
-# MAGIC                         .join(clustersQRs_exploded.alias('b'), on=['ActionGeo_FullName','EventTimeDate','EventRootCodeString'], how='left') \
-# MAGIC                         .select(
-# MAGIC                             *[
-# MAGIC                                 [ F.when(~F.isnull(F.col('b.UNICEF_regions')), F.col('b.{}'.format(c))
-# MAGIC                                     ).otherwise(F.col('a.{}'.format(c))).alias(c)
-# MAGIC                                     for c in cols_to_update
-# MAGIC                                 ]
-# MAGIC                             ]
-# MAGIC                         ) \
-# MAGIC                         .withColumn('id', F.monotonically_increasing_id())
-# MAGIC 
-# MAGIC # merge dataframes
-# MAGIC #all_cols = targetOutputPartitioned.drop(*cols_to_update).columns
-# MAGIC assessVariableOutliers = targetOutputPartitioned.select(*all_cols).join(countryClustersUpdate, on='id', how='outer').drop('id')
-# MAGIC 
-# MAGIC # verify output data
-# MAGIC print((assessVariableOutliers.count(), len(assessVariableOutliers.columns)))
-# MAGIC assessVariableOutliers.limit(3).toPandas()
-
-# COMMAND ----------
-
-#assessVariableOutliers.limit(20).toPandas()
 
 # COMMAND ----------
 
