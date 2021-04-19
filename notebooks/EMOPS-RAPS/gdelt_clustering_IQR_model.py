@@ -288,4 +288,12 @@ assessVariableOutliersSelect = assessVariableOutliers.select(cols)
 
 # COMMAND ----------
 
-assessVariableOutliersSelect.write.format('csv').option('header',True).mode('overwrite').option('sep',',').save('/Filestore/tables/tmp/gdelt/ALL_IQR_alertsystem_19april2021.csv')
+# DBTITLE 1,Store as CSV for PowerBI
+import os
+
+TEMPORARY_TARGET="dbfs:/FileStore/tables/tmp/gdelt/ALL_IQR_alertsystem_19april2021"
+DESIRED_TARGET="dbfs:/FileStore/tables/tmp/gdelt/ALL_IQR_alertsystem_19april2021.csv"
+
+assessVariableOutliersSelect.coalesce(1).write.option("header", "true").csv(TEMPORARY_TARGET)
+temporary_csv = os.path.join(TEMPORARY_TARGET, dbutils.fs.ls(TEMPORARY_TARGET)[3][1])
+dbutils.fs.cp(temporary_csv, DESIRED_TARGET)
