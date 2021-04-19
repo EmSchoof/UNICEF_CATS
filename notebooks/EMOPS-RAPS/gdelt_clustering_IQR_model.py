@@ -96,7 +96,7 @@ preprocessedGDELT.limit(5).toPandas()
 median_udf = F.udf(lambda x: float(np.quantile(x, 0.5)), FloatType())
 
 # Create New Dataframe Column to Count Number of Daily Articles by Country by EventRootCode
-targetOutput = preprocessedGDELTcon40.groupBy('ActionGeo_FullName','EventTimeDate','QuadClassString','EventRootCodeString') \
+targetOutput = preprocessedGDELTcon40.groupBy('ActionGeo_FullName','EventTimeDate','EventRootCodeString') \
                                      .agg(F.avg('Confidence').alias('avgConfidence'),
                                           F.collect_list('GoldsteinScale').alias('GoldsteinList'),
                                           F.collect_list('MentionDocTone').alias('ToneList'),
@@ -122,13 +122,13 @@ days = lambda i: i * 86400
 # --- for Creating Metrics ---
 
 # create a 1 day Window, 1 day previous to the current day (row), using previous casting of timestamp to long (number of seconds)
-rolling1d_window = Window.partitionBy('ActionGeo_FullName', 'QuadClassString', 'EventRootCodeString').orderBy(F.col('EventTimeDate').cast('timestamp').cast('long')).rangeBetween(-days(1), 0)
+rolling1d_window = Window.partitionBy('ActionGeo_FullName','EventRootCodeString').orderBy(F.col('EventTimeDate').cast('timestamp').cast('long')).rangeBetween(-days(1), 0)
 
 # create a 3 day Window, 3 days days previous to the current day (row), using previous casting of timestamp to long (number of seconds)
-rolling3d_window = Window.partitionBy('ActionGeo_FullName', 'QuadClassString', 'EventRootCodeString').orderBy(F.col('EventTimeDate').cast('timestamp').cast('long')).rangeBetween(-days(3), 0)
+rolling3d_window = Window.partitionBy('ActionGeo_FullName','EventRootCodeString').orderBy(F.col('EventTimeDate').cast('timestamp').cast('long')).rangeBetween(-days(3), 0)
 
 # create a 60 day Window, 60 days days previous to the current day (row), using previous casting of timestamp to long (number of seconds)
-rolling60d_window = Window.partitionBy('ActionGeo_FullName', 'QuadClassString', 'EventRootCodeString').orderBy(F.col('EventTimeDate').cast('timestamp').cast('long')).rangeBetween(-days(60), 0)
+rolling60d_window = Window.partitionBy('ActionGeo_FullName','EventRootCodeString').orderBy(F.col('EventTimeDate').cast('timestamp').cast('long')).rangeBetween(-days(60), 0)
 
 # COMMAND ----------
 
@@ -171,10 +171,10 @@ targetOutputPartitioned.limit(3).toPandas()
 # --- Windows for Evaluation Periods ---
 
 # create a 12 month Window, 12 months previous to the current day (row), using previous casting of timestamp to long (number of seconds)
-rolling12m_window = Window.partitionBy('ActionGeo_FullName', 'QuadClassString', 'EventRootCodeString').orderBy(F.col('EventTimeDate').cast('timestamp').cast('long')).rangeBetween(-days(365), 0)
+rolling12m_window = Window.partitionBy('ActionGeo_FullName','EventRootCodeString').orderBy(F.col('EventTimeDate').cast('timestamp').cast('long')).rangeBetween(-days(365), 0)
 
 # create a 24 month Window, 24 months previous to the current day (row), using previous casting of timestamp to long (number of seconds)
-rolling24m_window = Window.partitionBy('ActionGeo_FullName', 'QuadClassString', 'EventRootCodeString').orderBy(F.col('EventTimeDate').cast('timestamp').cast('long')).rangeBetween(-days(730), 0)
+rolling24m_window = Window.partitionBy('ActionGeo_FullName','EventRootCodeString').orderBy(F.col('EventTimeDate').cast('timestamp').cast('long')).rangeBetween(-days(730), 0)
 
 # COMMAND ----------
 
