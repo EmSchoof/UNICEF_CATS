@@ -208,10 +208,12 @@ rolling24m_window = Window.partitionBy('ActionGeo_FullName', 'EventRootCodeStrin
 
  # Events: 3d, 60d
 targetOutputTimelines = targetOutputPartitioned.withColumn('ERV_3d_12month_list', F.collect_list('ERV_3d_median').over(rolling12m_window)) \
+                                               .withColumn('ERV_3d_sampleN',  F.size('ERV_3d_12month_list'))  \
                                                .withColumn('ERV_3d_quantile25', lowerQ_udf('ERV_3d_12month_list'))  \
                                                .withColumn('ERV_3d_quantile75', upperQ_udf('ERV_3d_12month_list'))  \
                                                .withColumn('ERV_3d_IQR', IQR_udf(F.col('ERV_3d_quantile25'), F.col('ERV_3d_quantile75')))  \
                                                .withColumn('ERV_60d_24month_list', F.collect_list('ERV_60d_median').over(rolling24m_window)) \
+                                               .withColumn('ERV_60d_sampleN', F.size('ERV_60d_24month_list'))  \
                                                .withColumn('ERV_60d_quantile25', lowerQ_udf('ERV_60d_24month_list'))  \
                                                .withColumn('ERV_60d_quantile75', upperQ_udf('ERV_60d_24month_list')) \
                                                .withColumn('ERV_60d_IQR', IQR_udf(F.col('ERV_60d_quantile25'), F.col('ERV_60d_quantile75')))
@@ -242,6 +244,7 @@ targetOutputTimelines = targetOutputTimelines.withColumn('TRV_1d_12month_list', 
 # COMMAND ----------
 
 # verify output data
+targetOutputTimelines = targetOutputTimelines.orderBy('EventTimeDate', ascending=False)
 print((targetOutputTimelines.count(), len(targetOutputTimelines.columns)))
 targetOutputTimelines.limit(3).toPandas()
 
@@ -263,21 +266,19 @@ def get_upper_outliers(val, upperQ, IQR):
   else:
     return 'not upper outlier'
 
-upperOutlier_udf = F.udf(lambda val, upperQ, IQR: get_upper_outliers(val, upperQ, IQR), StringType())
+outliers_udf = F.udf(lambda val, upperQ, IQR: get_upper_outliers(val, upperQ, IQR), StringType())
 
 # COMMAND ----------
 
-# define outlier UDF function
-outliers_udf = F.udf(lambda val, median, qdev: 'normal' if np.abs(val - median) >= (qdev*2.2) else 'outlier', StringType())
-
 # identify outliers
-assessVariableOutliers = targetOutputPartitioned.withColumn('ERV_3d_outlier', outliers_udf(F.col('EventReportValue'), F.col('ERV_3d_median'), F.col('ERV_3d_qDeviation'))) \
-                                                 .withColumn('ERV_60d_outlier', outliers_udf(F.col('EventReportValue'), F.col('ERV_60d_median'), F.col('ERV_60d_qDeviation'))) \
-                                                 .withColumn('GRV_1d_outlier', outliers_udf(F.col('GoldsteinReportValue'), F.col('GRV_1d_median'), F.col('GRV_1d_qDeviation'))) \
-                                                 .withColumn('GRV_60d_outlier', outliers_udf(F.col('GoldsteinReportValue'), F.col('GRV_60d_median'), F.col('GRV_60d_qDeviation'))) \
-                                                 .withColumn('TRV_1d_outlier', outliers_udf(F.col('ToneReportValue'), F.col('TRV_1d_median'), F.col('TRV_1d_qDeviation'))) \
-                                                 .withColumn('TRV_60d_outlier', outliers_udf(F.col('ToneReportValue'), F.col('TRV_60d_median'), F.col('TRV_60d_qDeviation')))
+assessVariableOutliers = targetOutputTimelines.withColumn('ERV_3d_outlier', outliers_udf(F.col('ERV_3d_median'), F.col('ERV_3d_quantile75'), F.col('ERV_3d_IQR'))) \
+                                             .withColumn('ERV_60d_outlier', outliers_udf(F.col('ERV_60d_median'), F.col('ERV_60d_quantile75'), F.col('ERV_60d_IQR'))) \
+                                             .withColumn('GRV_1d_outlier', outliers_udf(F.col('GRV_1d_median'), F.col('GRV_1d_quantile75'), F.col('GRV_1d_IQR'))) \
+                                             .withColumn('GRV_60d_outlier', outliers_udf(F.col('GRV_60d_median'), F.col('GRV_60d_quantile75'), F.col('GRV_60d_IQR'))) \
+                                             .withColumn('TRV_1d_outlier', outliers_udf(F.col('TRV_1d_median'), F.col('TRV_1d_quantile75'), F.col('TRV_1d_IQR'))) \
+                                             .withColumn('TRV_60d_outlier', outliers_udf(F.col('TRV_60d_median'), F.col('TRV_60d_quantile75'), F.col('TRV_60d_IQR')))
 # verify output data
+assessVariableOutliers = assessVariableOutliers.orderBy('EventTimeDate', ascending=False)
 print((assessVariableOutliers.count(), len(assessVariableOutliers.columns)))
 assessVariableOutliers.select('ActionGeo_FullName','EventTimeDate','EventRootCodeString','nArticles',
                               'ERV_3d_outlier','ERV_60d_outlier',
@@ -287,57 +288,4 @@ assessVariableOutliers.select('ActionGeo_FullName','EventTimeDate','EventRootCod
 
 # COMMAND ----------
 
-assessVariableOutliers.printSchema()
-
-# COMMAND ----------
-
-#assessVariableOutliers = assessVariableOutliers.withColumn('UNICEF_regions', F.when(F.col('UNICEF_regions') == F.lit(None), '').otherwise(F.col('UNICEF_regions')))
-assessVariableOutliers.write.format('csv').option('header',True).mode('overwrite').option('sep',',').save('/Filestore/tables/tmp/gdelt/ALL_IQR_alertsystem_16april2021.csv')
-
-# COMMAND ----------
-
-# MAGIC %md 
-# MAGIC #### Explore Output
-
-# COMMAND ----------
-
-# Test output
-AFG = assessVariableOutliers.filter(F.col('ActionGeo_FullName') == 'Afghanistan')
-AFG.limit(20).toPandas()
-
-# COMMAND ----------
-
-groupCols = ['EventRootCodeString',
-             'ERV_3d_outlier','ERV_60d_outlier']
-AFG_E = AFG.select(groupCols) \
-           .groupBy(groupCols) \
-           .count() \
-           .orderBy('EventRootCodeString') \
-           .toPandas()
-display(AFG_E)
-
-# COMMAND ----------
-
-groupCols = ['EventRootCodeString',
-             'GRV_1d_outlier','GRV_60d_outlier']
-AFG_G = AFG.select(groupCols) \
-           .groupBy(groupCols) \
-           .count() \
-           .orderBy('EventRootCodeString') \
-           .toPandas()
-display(AFG_G)
-
-# COMMAND ----------
-
-groupCols = ['EventRootCodeString',
-             'TRV_1d_outlier','TRV_60d_outlier']
-AFG_T = AFG.select(groupCols) \
-           .groupBy(groupCols) \
-           .count() \
-           .orderBy('EventRootCodeString') \
-           .toPandas()
-display(AFG_T)
-
-# COMMAND ----------
-
-AFG.na.fill("").write.format('csv').option('header',True).mode('overwrite').option('sep',',').save('/Filestore/tables/tmp/gdelt/AFG_MAD_alertsystem_14april2021.csv')
+assessVariableOutliers.write.format('csv').option('header',True).mode('overwrite').option('sep',',').save('/Filestore/tables/tmp/gdelt/ALL_IQR_alertsystem_18april2021.csv')
