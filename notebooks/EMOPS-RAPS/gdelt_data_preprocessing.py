@@ -194,6 +194,18 @@ min_date, max_date
 
 # COMMAND ----------
 
+# DBTITLE 1,Select Data with Confidence of 40% or higher
+# create confidence column of more than 
+print(gdeltFebNoNullsSelectD.count())
+gdeltFebNoNullsSelectDcon40 = gdeltFebNoNullsSelectD.filter(F.col('Confidence') >= 40)
+print(gdeltFebNoNullsSelectDcon40.count())
+
+# convert datetime column to dates
+gdeltFebNoNullsSelectDcon40 = gdeltFebNoNullsSelectDcon40.withColumn('EventTimeDate', F.col('EventTimeDate').cast('date'))
+gdeltFebNoNullsSelectDcon40.limit(2).toPandas()
+
+# COMMAND ----------
+
 # DBTITLE 1,Create Cameo Code Root Integer Values with Associated String
 # Create CAMEO verbs list
 cameo_verbs = ['MAKE PUBLIC STATEMENT','APPEAL','EXPRESS INTENT TO COOPERATE','CONSULT',
@@ -204,7 +216,7 @@ cameo_verbs = ['MAKE PUBLIC STATEMENT','APPEAL','EXPRESS INTENT TO COOPERATE','C
 print(cameo_verbs)
 
 # Create distinct list of CAMEO EventRootCodes
-cameo_codes = gdeltFebNoNullsSelectD.select('EventRootCode').distinct().rdd.map(lambda r: r[0]).collect()
+cameo_codes = gdeltFebNoNullsSelectDcon40.select('EventRootCode').distinct().rdd.map(lambda r: r[0]).collect()
 cameo_codes_ordered = sorted(cameo_codes)
 print(cameo_codes_ordered)
 
@@ -216,11 +228,11 @@ cameo_verbs_dict
 
 # Map dictionary over df to create string column
 mapping_expr = F.create_map([F.lit(x) for x in chain(*cameo_verbs_dict.items())])
-gdeltFebNoNullsSelectD = gdeltFebNoNullsSelectD.withColumn('EventRootCodeString', mapping_expr[F.col('EventRootCode')])
+gdeltFebNoNullsSelectDcon40 = gdeltFebNoNullsSelectDcon40.withColumn('EventRootCodeString', mapping_expr[F.col('EventRootCode')])
 
 # Confirm accurate output
-gdeltFebNoNullsSelectD.select('EventRootCode', 'EventRootCodeString').dropDuplicates().sort(F.col('EventRootCode')).show()
-gdeltFebNoNullsSelectD.limit(1).toPandas()
+gdeltFebNoNullsSelectDcon40.select('EventRootCode', 'EventRootCodeString').dropDuplicates().sort(F.col('EventRootCode')).show()
+gdeltFebNoNullsSelectDcon40.limit(1).toPandas()
 
 # COMMAND ----------
 
@@ -230,7 +242,7 @@ cameo_quadclass = ['Verbal Cooperation','Material Cooperation','Verbal Conflict'
 print(cameo_quadclass)
 
 # Create distinct list of CAMEO QuadClass codes
-cameo_quadclass_codes = gdeltFebNoNullsSelectD.select('QuadClass').distinct().rdd.map(lambda r: r[0]).collect()
+cameo_quadclass_codes = gdeltFebNoNullsSelectDcon40.select('QuadClass').distinct().rdd.map(lambda r: r[0]).collect()
 cameo_quadclass_codes_ordered = sorted(cameo_quadclass_codes)
 print(cameo_quadclass_codes_ordered)
 
@@ -242,11 +254,11 @@ cameo_quadclass_dict
 
 # Map dictionary over df to create string column
 mapping_expr = F.create_map([F.lit(x) for x in chain(*cameo_quadclass_dict.items())])
-gdeltFebNoNullsSelectD = gdeltFebNoNullsSelectD.withColumn('QuadClassString', mapping_expr[F.col('QuadClass')])
+gdeltFebNoNullsSelectDcon40 = gdeltFebNoNullsSelectDcon40.withColumn('QuadClassString', mapping_expr[F.col('QuadClass')])
 
 # Confirm accurate output
-gdeltFebNoNullsSelectD.select('QuadClass', 'QuadClassString').dropDuplicates().sort(F.col('QuadClass')).show()
-gdeltFebNoNullsSelectD.limit(1).toPandas()
+gdeltFebNoNullsSelectDcon40.select('QuadClass', 'QuadClassString').dropDuplicates().sort(F.col('QuadClass')).show()
+gdeltFebNoNullsSelectDcon40.limit(1).toPandas()
 
 # COMMAND ----------
 
@@ -261,10 +273,8 @@ country_codes_df = spark.read.format("csv") \
   .option("inferSchema", infer_schema) \
   .option("header", first_row_is_header) \
   .option("sep", delimiter) \
-  .load("/Filestore/tables/countries.csv")
+  .load("/FileStore/tables/tmp/gdelt/countries.csv")
 
-# Replace \x81 with an empty string
-#country_codes_df = country_codes_df.withColumn('name', F.regexp_replace('name', '\x81Aland Islands', 'Aland Islands'))  
 country_codes_df.limit(5).toPandas()
 
 # COMMAND ----------
@@ -281,17 +291,17 @@ country_fips104_dict
 
 # Map dictionary over df to create string column
 mapping_expr = F.create_map([F.lit(x) for x in chain(*country_fips104_dict.items())])
-gdeltFebNoNullsSelectD = gdeltFebNoNullsSelectD.withColumn('ActionGeo_FullName', mapping_expr[F.col('ActionGeo_CountryCode')])
+gdeltFebNoNullsSelectDcon40 = gdeltFebNoNullsSelectDcon40.withColumn('ActionGeo_FullName', mapping_expr[F.col('ActionGeo_CountryCode')])
 
 # Confirm accurate output
-print(gdeltFebNoNullsSelectD.select('ActionGeo_CountryCode', 'ActionGeo_FullName').dropDuplicates().sort(F.col('ActionGeo_FullName')).count())
-gdeltFebNoNullsSelectD.limit(1).toPandas()
+print(gdeltFebNoNullsSelectDcon40.select('ActionGeo_CountryCode', 'ActionGeo_FullName').dropDuplicates().sort(F.col('ActionGeo_FullName')).count())
+gdeltFebNoNullsSelectDcon40.limit(1).toPandas()
 
 # COMMAND ----------
 
 # DBTITLE 1,Assess Remaining Null Values for Country Name
 # Assess Nulls in Country Name Strings
-nullCountries = gdeltFebNoNullsSelectD.select('ActionGeo_CountryCode', 'ActionGeo_FullName').dropDuplicates().sort(F.col('ActionGeo_FullName')).where(F.col('ActionGeo_FullName').isNull())
+nullCountries = gdeltFebNoNullsSelectDcon40.select('ActionGeo_CountryCode', 'ActionGeo_FullName').dropDuplicates().sort(F.col('ActionGeo_FullName')).where(F.col('ActionGeo_FullName').isNull())
 print(nullCountries.count())
 nullCountries.show()
 
@@ -305,42 +315,25 @@ nullCountries.show()
 # COMMAND ----------
 
 # DBTITLE 1,Replace Missing FIPS 10-4 Country Code Names
-gdeltFebNoNullsSelectDFIPS = gdeltFebNoNullsSelectD.withColumn(
-    'ActionGeo_FullName',
-    F.when(F.col('ActionGeo_CountryCode') == 'YI', "Serbia and Montenegro")
-    .when(F.col('ActionGeo_CountryCode') == 'PF', "Paracel Islands")
-    .when(F.col('ActionGeo_CountryCode') == 'NT', "Netherlands Antilles")
-    .when(F.col('ActionGeo_CountryCode') == 'PG', "Spratly Islands")
-    .when(F.col('ActionGeo_CountryCode') == 'GZ', "Gaza Strip")
-    .when(F.col('ActionGeo_CountryCode') == 'RB', "Serbia")
-    .when(F.col('ActionGeo_CountryCode') == 'WQ', "Wake Island")
-    .when(F.col('ActionGeo_CountryCode') == 'KV', "Kosovo")
-    .when(F.col('ActionGeo_CountryCode') == 'DA', "Denmark")
-    .when(F.col('ActionGeo_CountryCode') == 'UP', "Ukraine")
-    .when(F.col('ActionGeo_CountryCode') == 'HQ', "Howland Island")
-    .when(F.col('ActionGeo_CountryCode') == 'VM', "Vietnam")
-    .when(F.col('ActionGeo_CountryCode') == 'JN', "Jan Mayen")
-    .when(F.col('ActionGeo_CountryCode') == 'LQ', "Palmyra Atoll")
-    .when(F.col('ActionGeo_CountryCode') == 'BQ', "Navassa Island")
-    .when(F.col('ActionGeo_CountryCode') == 'JQ', "Johnston Atoll")
-    .when(F.col('ActionGeo_CountryCode') == 'BS', "Bassas da India")
-    .when(F.col('ActionGeo_CountryCode') == 'FQ', "Baker Island")
-    .when(F.col('ActionGeo_CountryCode') == 'IP', "Clipperton Island")
-    .otherwise(F.col('ActionGeo_FullName'))
-)
+#gdeltFebNoNullsSelectDFIPS = gdeltFebNoNullsSelectDcon40.withColumn(
+   # 'ActionGeo_FullName',
+   # F.when(F.col('ActionGeo_CountryCode') == 'YI', "Serbia and Montenegro")
+   # .when(F.col('ActionGeo_CountryCode') == 'IP', "Clipperton Island")
+   # .otherwise(F.col('ActionGeo_FullName'))
+#)
 
 # COMMAND ----------
 
 # verify output
-nullCountries = gdeltFebNoNullsSelectDFIPS.select('ActionGeo_CountryCode', 'ActionGeo_FullName').dropDuplicates().sort(F.col('ActionGeo_FullName')).where(F.col('ActionGeo_FullName').isNull())
-print(nullCountries.count())
-nullCountries.show()
+#nullCountries = gdeltFebNoNullsSelectDFIPS.select('ActionGeo_CountryCode', 'ActionGeo_FullName').dropDuplicates().sort(F.col('ActionGeo_FullName')).where(F.col('ActionGeo_FullName').isNull())
+#print(nullCountries.count())
+#nullCountries.show()
 
 # COMMAND ----------
 
 # DBTITLE 1,Assess Countries Associated with OC and OS Country Codes
-unknownCountries = gdeltFebNoNullsSelectDFIPS.select('ActionGeo_CountryCode', 'ActionGeo_FullName').dropDuplicates().sort(F.col('ActionGeo_CountryCode')).where(F.col('ActionGeo_CountryCode').isin('OC','OS'))
-unknownCountries.show()
+#unknownCountries = gdeltFebNoNullsSelectDFIPS.select('ActionGeo_CountryCode', 'ActionGeo_FullName').dropDuplicates().sort(F.col('ActionGeo_CountryCode')).where(F.col('ActionGeo_CountryCode').isin('OC','OS'))
+#unknownCountries.show()
 
 # COMMAND ----------
 
@@ -351,25 +344,25 @@ unknownCountries.show()
 # COMMAND ----------
 
 # DBTITLE 1,Date Removal (3): Add Ocean FIPS Code Strings and Drop Rows w/o Coordinates
-gdeltFebNoNullsSelectDFIPSocean = gdeltFebNoNullsSelectDFIPS.withColumn(
-    'ActionGeo_FullName',
-    F.when(F.col('ActionGeo_CountryCode') == 'OC', "Oceans, (Atlantic, Artic, Pacific, or Indian)")
-    .when(F.col('ActionGeo_CountryCode') == 'OS', "Oceans, (general)")  
-    .otherwise(F.col('ActionGeo_FullName'))
-)
+#gdeltFebNoNullsSelectDFIPSocean = gdeltFebNoNullsSelectDFIPS.withColumn(
+  #  'ActionGeo_FullName',
+  #  F.when(F.col('ActionGeo_CountryCode') == 'OC', "Oceans, (Atlantic, Artic, Pacific, or Indian)")
+  #  .when(F.col('ActionGeo_CountryCode') == 'OS', "Oceans, (general)")  
+  # .otherwise(F.col('ActionGeo_FullName'))
+#)
 
 # verify output
-nullCountriesOceans = gdeltFebNoNullsSelectDFIPSocean.select('ActionGeo_CountryCode', 'ActionGeo_FullName').dropDuplicates().sort(F.col('ActionGeo_FullName')).where(F.col('ActionGeo_FullName').isNull())
-print(nullCountriesOceans.count())
-nullCountriesOceans.show()
+#nullCountriesOceans = gdeltFebNoNullsSelectDFIPSocean.select('ActionGeo_CountryCode', 'ActionGeo_FullName').dropDuplicates().sort(F.col('ActionGeo_FullName')).where(F.col('ActionGeo_FullName').isNull())
+#print(nullCountriesOceans.count())
+#nullCountriesOceans.show()
 
 # COMMAND ----------
 
 # DBTITLE 1,Verify NoNulls in Target Variables
-print('Original Dataframe: ', (gdeltFebNoNullsSelectDFIPSocean.count(), len(gdeltFebNoNullsSelectDFIPSocean.columns)))
+#print('Original Dataframe: ', (gdeltFebNoNullsSelectDFIPSocean.count(), len(gdeltFebNoNullsSelectDFIPSocean.columns)))
 
 # drop rows where FIPS codes are present without Event coordinates
-gdeltPreprocessedData = gdeltFebNoNullsSelectDFIPSocean.na.drop(subset=['ActionGeo_Lat', 'ActionGeo_Long'])
+gdeltPreprocessedData = gdeltFebNoNullsSelectDcon40.na.drop(subset=['ActionGeo_Lat', 'ActionGeo_Long'])
 
 # verify output
 print('Removal of Nulls Dataframe: ', (gdeltPreprocessedData.count(), len(gdeltPreprocessedData.columns)))
@@ -413,4 +406,4 @@ outputPreprocessedGDELT.limit(10).toPandas()
 # COMMAND ----------
 
 # DBTITLE 1,Save DataFrame as CSV
-outputPreprocessedGDELT.write.format('csv').option('header',True).mode('overwrite').option('sep',',').save('/Filestore/tables/tmp/gdelt/preprocessed.csv')
+outputPreprocessedGDELT.write.format('csv').option('header',True).mode('overwrite').option('sep',',').save('/FileStore/tables/tmp/gdelt/preprocessed.csv')
