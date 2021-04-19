@@ -273,10 +273,8 @@ country_codes_df = spark.read.format("csv") \
   .option("inferSchema", infer_schema) \
   .option("header", first_row_is_header) \
   .option("sep", delimiter) \
-  .load("/Filestore/tables/countries.csv")
+  .load("/FileStore/tables/tmp/gdelt/countries.csv")
 
-# Replace \x81 with an empty string
-#country_codes_df = country_codes_df.withColumn('name', F.regexp_replace('name', '\x81Aland Islands', 'Aland Islands'))  
 country_codes_df.limit(5).toPandas()
 
 # COMMAND ----------
@@ -317,42 +315,25 @@ nullCountries.show()
 # COMMAND ----------
 
 # DBTITLE 1,Replace Missing FIPS 10-4 Country Code Names
-gdeltFebNoNullsSelectDFIPS = gdeltFebNoNullsSelectDcon40.withColumn(
-    'ActionGeo_FullName',
-    F.when(F.col('ActionGeo_CountryCode') == 'YI', "Serbia and Montenegro")
-    .when(F.col('ActionGeo_CountryCode') == 'PF', "Paracel Islands")
-    .when(F.col('ActionGeo_CountryCode') == 'NT', "Netherlands Antilles")
-    .when(F.col('ActionGeo_CountryCode') == 'PG', "Spratly Islands")
-    .when(F.col('ActionGeo_CountryCode') == 'GZ', "Gaza Strip")
-    .when(F.col('ActionGeo_CountryCode') == 'RB', "Serbia")
-    .when(F.col('ActionGeo_CountryCode') == 'WQ', "Wake Island")
-    .when(F.col('ActionGeo_CountryCode') == 'KV', "Kosovo")
-    .when(F.col('ActionGeo_CountryCode') == 'DA', "Denmark")
-    .when(F.col('ActionGeo_CountryCode') == 'UP', "Ukraine")
-    .when(F.col('ActionGeo_CountryCode') == 'HQ', "Howland Island")
-    .when(F.col('ActionGeo_CountryCode') == 'VM', "Vietnam")
-    .when(F.col('ActionGeo_CountryCode') == 'JN', "Jan Mayen")
-    .when(F.col('ActionGeo_CountryCode') == 'LQ', "Palmyra Atoll")
-    .when(F.col('ActionGeo_CountryCode') == 'BQ', "Navassa Island")
-    .when(F.col('ActionGeo_CountryCode') == 'JQ', "Johnston Atoll")
-    .when(F.col('ActionGeo_CountryCode') == 'BS', "Bassas da India")
-    .when(F.col('ActionGeo_CountryCode') == 'FQ', "Baker Island")
-    .when(F.col('ActionGeo_CountryCode') == 'IP', "Clipperton Island")
-    .otherwise(F.col('ActionGeo_FullName'))
-)
+#gdeltFebNoNullsSelectDFIPS = gdeltFebNoNullsSelectDcon40.withColumn(
+   # 'ActionGeo_FullName',
+   # F.when(F.col('ActionGeo_CountryCode') == 'YI', "Serbia and Montenegro")
+   # .when(F.col('ActionGeo_CountryCode') == 'IP', "Clipperton Island")
+   # .otherwise(F.col('ActionGeo_FullName'))
+#)
 
 # COMMAND ----------
 
 # verify output
-nullCountries = gdeltFebNoNullsSelectDFIPS.select('ActionGeo_CountryCode', 'ActionGeo_FullName').dropDuplicates().sort(F.col('ActionGeo_FullName')).where(F.col('ActionGeo_FullName').isNull())
-print(nullCountries.count())
-nullCountries.show()
+#nullCountries = gdeltFebNoNullsSelectDFIPS.select('ActionGeo_CountryCode', 'ActionGeo_FullName').dropDuplicates().sort(F.col('ActionGeo_FullName')).where(F.col('ActionGeo_FullName').isNull())
+#print(nullCountries.count())
+#nullCountries.show()
 
 # COMMAND ----------
 
 # DBTITLE 1,Assess Countries Associated with OC and OS Country Codes
-unknownCountries = gdeltFebNoNullsSelectDFIPS.select('ActionGeo_CountryCode', 'ActionGeo_FullName').dropDuplicates().sort(F.col('ActionGeo_CountryCode')).where(F.col('ActionGeo_CountryCode').isin('OC','OS'))
-unknownCountries.show()
+#unknownCountries = gdeltFebNoNullsSelectDFIPS.select('ActionGeo_CountryCode', 'ActionGeo_FullName').dropDuplicates().sort(F.col('ActionGeo_CountryCode')).where(F.col('ActionGeo_CountryCode').isin('OC','OS'))
+#unknownCountries.show()
 
 # COMMAND ----------
 
@@ -363,25 +344,25 @@ unknownCountries.show()
 # COMMAND ----------
 
 # DBTITLE 1,Date Removal (3): Add Ocean FIPS Code Strings and Drop Rows w/o Coordinates
-gdeltFebNoNullsSelectDFIPSocean = gdeltFebNoNullsSelectDFIPS.withColumn(
-    'ActionGeo_FullName',
-    F.when(F.col('ActionGeo_CountryCode') == 'OC', "Oceans, (Atlantic, Artic, Pacific, or Indian)")
-    .when(F.col('ActionGeo_CountryCode') == 'OS', "Oceans, (general)")  
-    .otherwise(F.col('ActionGeo_FullName'))
-)
+#gdeltFebNoNullsSelectDFIPSocean = gdeltFebNoNullsSelectDFIPS.withColumn(
+  #  'ActionGeo_FullName',
+  #  F.when(F.col('ActionGeo_CountryCode') == 'OC', "Oceans, (Atlantic, Artic, Pacific, or Indian)")
+  #  .when(F.col('ActionGeo_CountryCode') == 'OS', "Oceans, (general)")  
+  # .otherwise(F.col('ActionGeo_FullName'))
+#)
 
 # verify output
-nullCountriesOceans = gdeltFebNoNullsSelectDFIPSocean.select('ActionGeo_CountryCode', 'ActionGeo_FullName').dropDuplicates().sort(F.col('ActionGeo_FullName')).where(F.col('ActionGeo_FullName').isNull())
-print(nullCountriesOceans.count())
-nullCountriesOceans.show()
+#nullCountriesOceans = gdeltFebNoNullsSelectDFIPSocean.select('ActionGeo_CountryCode', 'ActionGeo_FullName').dropDuplicates().sort(F.col('ActionGeo_FullName')).where(F.col('ActionGeo_FullName').isNull())
+#print(nullCountriesOceans.count())
+#nullCountriesOceans.show()
 
 # COMMAND ----------
 
 # DBTITLE 1,Verify NoNulls in Target Variables
-print('Original Dataframe: ', (gdeltFebNoNullsSelectDFIPSocean.count(), len(gdeltFebNoNullsSelectDFIPSocean.columns)))
+#print('Original Dataframe: ', (gdeltFebNoNullsSelectDFIPSocean.count(), len(gdeltFebNoNullsSelectDFIPSocean.columns)))
 
 # drop rows where FIPS codes are present without Event coordinates
-gdeltPreprocessedData = gdeltFebNoNullsSelectDFIPSocean.na.drop(subset=['ActionGeo_Lat', 'ActionGeo_Long'])
+gdeltPreprocessedData = gdeltFebNoNullsSelectDcon40.na.drop(subset=['ActionGeo_Lat', 'ActionGeo_Long'])
 
 # verify output
 print('Removal of Nulls Dataframe: ', (gdeltPreprocessedData.count(), len(gdeltPreprocessedData.columns)))
