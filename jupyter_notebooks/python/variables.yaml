@@ -1,0 +1,44 @@
+# Pilot Data Selection Criteria
+CAMEO_VERBS: ['MAKE PUBLIC STATEMENT', 'APPEAL', 'EXPRESS INTENT TO COOPERATE', 'CONSULT',
+              'ENGAGE IN DIPLOMATIC COOPERATION', 'ENGAGE IN MATERIAL COOPERATION', 'PROVIDE AID',
+               'YIELD', 'INVESTIGATE', 'DEMAND', 'DISAPPROVE', 'REJECT', 'THREATEN', 'PROTEST',
+               'EXHIBIT MILITARY POSTURE', 'REDUCE RELATIONS', 'COERCE', 'ASSAULT', 'FIGHT',
+               'ENGAGE IN UNCONVENTIONAL MASS VIOLENCE']
+CAMEO_QUADCLASS: ['Verbal Cooperation','Material Cooperation','Verbal Conflict','Material Conflict']
+PILOT_COUNTRIES_IOS2: [ 'AF','AO','BD','BR','BF','BI','CM','CF','TD','CG','CD','ER',
+                        'ET','GH','GN','HT','IN','IR','IQ','KE','KG','LB','LS','LY',
+                        'MG','ML','MR','MZ','MM','NP','NE','NG','PK','PS','RW','SN',
+                        'SL','SO','SS','SD','SY','TJ','UG','UA','VE','YE','ZW','TH',
+                        'BJ','GA','ZM','TZ','US','NO','IT','FR','SB','MN','RS','NI' ]
+
+# GDELT Data CSVs Information
+#Events
+EVENTS_CSV: '../select_data/data/latest_gdelt_events.csv'
+EVENTS_COLS_ALL: ['GLOBALEVENTID','SQLDATE','MonthYear','Year','FractionDate','Actor1Code',
+                 'Actor1Name','Actor1CountryCode','Actor1KnownGroupCode','Actor1EthnicCode',
+                 'Actor1Religion1Code','Actor1Religion2Code','Actor1Type1Code','Actor1Type2Code',
+                 'Actor1Type3Code','Actor2Code','Actor2Name','Actor2CountryCode','Actor2KnownGroupCode',
+                 'Actor2EthnicCode','Actor2Religion1Code','Actor2Religion2Code','Actor2Type1Code',
+                 'Actor2Type2Code','Actor2Type3Code','IsRootEvent','EventCode','EventBaseCode',
+                 'EventRootCode','QuadClass','GoldsteinScale','NumMentions','NumSources',
+                 'NumArticles','AvgTone','Actor1Geo_Type','Actor1Geo_FullName','Actor1Geo_CountryCode',
+                 'Actor1Geo_ADM1Code','Actor1Geo_ADM2Code','Actor1Geo_Lat','Actor1Geo_Long',
+                 'Actor1Geo_FeatureID','Actor2Geo_Type','Actor2Geo_FullName','Actor2Geo_CountryCode',
+                 'Actor2Geo_ADM1Code','Actor2Geo_ADM2Code','Actor2Geo_Lat','Actor2Geo_Long',
+                 'Actor2Geo_FeatureID','ActionGeo_Type','ActionGeo_FullName','ActionGeo_CountryCode',
+                 'ActionGeo_ADM1Code','ActionGeo_ADM2Code','ActionGeo_Lat','ActionGeo_Long',
+                 'ActionGeo_FeatureID','DATEADDED','SOURCEURL']
+EVENTS_COLS_SELECT: ['GLOBALEVENTID','SQLDATE','EventCode','EventRootCode','QuadClass',
+                    'GoldsteinScale','ActionGeo_Type','ActionGeo_FullName',
+                    'ActionGeo_CountryCode', 'ActionGeo_Lat','ActionGeo_Long','SOURCEURL']
+#Mentions
+MENTIONS_CSV: '../select_data/data/latest_gdelt_mentions.csv'
+MENTIONS_COLS_ALL: ['GLOBALEVENTID','EventTimeDate','MentionTimeDate','MentionType','MentionSourceName',
+                    'MentionIdentifier','SentenceID','Actor1CharOffset','Actor2CharOffset','ActionCharOffset',
+                    'InRawText','Confidence','MentionDocLen','MentionDocTone','MentionDocTranslationInfo','Extras']
+MENTIONS_COLS_SELECT: ['GLOBALEVENTID','EventTimeDate', 'MentionTimeDate','Confidence','MentionDocTone']
+
+#Data Factory Output
+DESIRED_COLUMNS: ['GLOBALEVENTID', 'EventTimeDate', 'MentionTimeDate', 'DaysBetween', 'Confidence','MentionDocTone',
+                  'ActionGeo_CountryCode', 'ActionGeo_FullName', 'EventCode', 'EventRootCodeString', 'QuadClass',
+                  'QuadClassString','GoldsteinScale','ActionGeo_Lat','ActionGeo_Long','SOURCEURL']
