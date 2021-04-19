@@ -99,27 +99,7 @@ preprocessedGDELTcon40.limit(2).toPandas()
 # COMMAND ----------
 
 # MAGIC %md 
-# MAGIC ### Create Target Variables
-# MAGIC - Calculate IQR for clusters 
-# MAGIC - Calculate IQR and IQR-Outlier for all countries
-# MAGIC - Calculate Power for Statistics
-
-# COMMAND ----------
-
-# DBTITLE 1,Create Rolling Windows
-# function to calculate number of seconds from number of days
-days = lambda i: i * 86400
-
-# --- for Creating Metrics ---
-
-# create a 1 day Window, 1 day previous to the current day (row), using previous casting of timestamp to long (number of seconds)
-rolling1d_window = Window.partitionBy('ActionGeo_FullName', 'QuadClassString', 'EventRootCodeString').orderBy(F.col('EventTimeDate').cast('timestamp').cast('long')).rangeBetween(-days(1), 0)
-
-# create a 3 day Window, 3 days days previous to the current day (row), using previous casting of timestamp to long (number of seconds)
-rolling3d_window = Window.partitionBy('ActionGeo_FullName', 'QuadClassString', 'EventRootCodeString').orderBy(F.col('EventTimeDate').cast('timestamp').cast('long')).rangeBetween(-days(3), 0)
-
-# create a 60 day Window, 60 days days previous to the current day (row), using previous casting of timestamp to long (number of seconds)
-rolling60d_window = Window.partitionBy('ActionGeo_FullName', 'QuadClassString', 'EventRootCodeString').orderBy(F.col('EventTimeDate').cast('timestamp').cast('long')).rangeBetween(-days(60), 0)
+# MAGIC ## Create Target Variables
 
 # COMMAND ----------
 
@@ -147,19 +127,24 @@ targetOutputPartitioned.limit(2).toPandas()
 
 # COMMAND ----------
 
-# MAGIC %md
-# MAGIC ### Calculate IQR for 12 month and 24 month Windows
+# DBTITLE 1,Create Rolling Windows
+# function to calculate number of seconds from number of days
+days = lambda i: i * 86400
+
+# --- for Creating Metrics ---
+
+# create a 1 day Window, 1 day previous to the current day (row), using previous casting of timestamp to long (number of seconds)
+rolling1d_window = Window.partitionBy('ActionGeo_FullName', 'QuadClassString', 'EventRootCodeString').orderBy(F.col('EventTimeDate').cast('timestamp').cast('long')).rangeBetween(-days(1), 0)
+
+# create a 3 day Window, 3 days days previous to the current day (row), using previous casting of timestamp to long (number of seconds)
+rolling3d_window = Window.partitionBy('ActionGeo_FullName', 'QuadClassString', 'EventRootCodeString').orderBy(F.col('EventTimeDate').cast('timestamp').cast('long')).rangeBetween(-days(3), 0)
+
+# create a 60 day Window, 60 days days previous to the current day (row), using previous casting of timestamp to long (number of seconds)
+rolling60d_window = Window.partitionBy('ActionGeo_FullName', 'QuadClassString', 'EventRootCodeString').orderBy(F.col('EventTimeDate').cast('timestamp').cast('long')).rangeBetween(-days(60), 0)
 
 # COMMAND ----------
 
-# DBTITLE 1,UDF Functions
-lowerQ_udf = F.udf(lambda x: float(np.quantile(x, 0.25)), FloatType())
-upperQ_udf = F.udf(lambda x: float(np.quantile(x, 0.75)), FloatType())
-IQR_udf = F.udf(lambda lowerQ, upperQ: (upperQ - lowerQ), FloatType())
-
-# COMMAND ----------
-
-# DBTITLE 1,Create IQR Values per Country per Date per Event Code
+# DBTITLE 1,Calculate Medians per Country per Date per QuadClass and Event Code
 # Events: 3d, 60d
 targetOutputPartitioned = targetOutputPartitioned.withColumn('ERV_3d_list', F.collect_list('EventReportValue').over(rolling3d_window)) \
                                                  .withColumn('ERV_3d_median', median_udf('ERV_3d_list'))  \
@@ -188,9 +173,10 @@ targetOutputPartitioned.limit(3).toPandas()
 
 # COMMAND ----------
 
-# DBTITLE 1,Create IQR Time Windows for 12 and 24 months
 # MAGIC %md
-# MAGIC #### Since this data only goes back 4 months, the time windows will not be accurate and will inevitably match. However, the formulation will proceed as follows:
+# MAGIC ## Create IQR Time Windows for 12 and 24 months
+# MAGIC 
+# MAGIC #### NOTE: Since this data only goes back 4 months, the time windows will not be accurate and will inevitably match. However, the formulation will proceed as follows:
 
 # COMMAND ----------
 
@@ -201,6 +187,13 @@ rolling12m_window = Window.partitionBy('ActionGeo_FullName', 'QuadClassString', 
 
 # create a 24 month Window, 24 months previous to the current day (row), using previous casting of timestamp to long (number of seconds)
 rolling24m_window = Window.partitionBy('ActionGeo_FullName', 'QuadClassString', 'EventRootCodeString').orderBy(F.col('EventTimeDate').cast('timestamp').cast('long')).rangeBetween(-days(730), 0)
+
+# COMMAND ----------
+
+# DBTITLE 1,UDF Functions
+lowerQ_udf = F.udf(lambda x: float(np.quantile(x, 0.25)), FloatType())
+upperQ_udf = F.udf(lambda x: float(np.quantile(x, 0.75)), FloatType())
+IQR_udf = F.udf(lambda lowerQ, upperQ: (upperQ - lowerQ), FloatType())
 
 # COMMAND ----------
 
