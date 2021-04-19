@@ -134,10 +134,8 @@ targetOutput = preprocessedGDELTcon40.groupBy('ActionGeo_FullName','EventTimeDat
                                           F.collect_list('MentionDocTone').alias('ToneList'),
                                           F.sum('nArticles').alias('nArticles')) \
                                       .withColumn('GoldsteinReportValue', median_udf('GoldsteinList')) \
-                                      .withColumn('ToneReportValue', median_udf('ToneList'))
-
-# drop non-needed columns
-targetOutput = targetOutput.drop('GoldsteinList','ToneList')
+                                      .withColumn('ToneReportValue', median_udf('ToneList')) \
+                                      .drop('GoldsteinList','ToneList')
 
 # create a Window, country by date
 countriesDaily_window = Window.partitionBy('ActionGeo_FullName','EventTimeDate').orderBy('EventTimeDate')
@@ -258,25 +256,26 @@ targetOutputTimelines.limit(3).toPandas()
 def get_upper_outliers(val, upperQ, IQR):
   mild_upper_outlier = upperQ + (IQR*1.5)
   extreme_upper_outlier = upperQ + (IQR*3)
-  
-  if (val >= mild_upper_outlier) and (val <= extreme_mild_outlier) :
-    return 'mild upper outlier'
+  string = ''
+  if (val >= mild_upper_outlier) and (val <= extreme_mild_outlier):
+     string = 'mild max outlier'
   elif (val >= extreme_upper_outlier):
-    return 'extreme upper outlier'
+    string = 'extreme max outlier'
   else:
-    return 'not upper outlier'
+    string = 'not max outlier'
+  return string
 
 outliers_udf = F.udf(lambda val, upperQ, IQR: get_upper_outliers(val, upperQ, IQR), StringType())
 
 # COMMAND ----------
 
 # identify outliers
-assessVariableOutliers = targetOutputTimelines.withColumn('ERV_3d_outlier', outliers_udf(F.col('ERV_3d_median'), F.col('ERV_3d_quantile75'), F.col('ERV_3d_IQR'))) \
-                                             .withColumn('ERV_60d_outlier', outliers_udf(F.col('ERV_60d_median'), F.col('ERV_60d_quantile75'), F.col('ERV_60d_IQR'))) \
-                                             .withColumn('GRV_1d_outlier', outliers_udf(F.col('GRV_1d_median'), F.col('GRV_1d_quantile75'), F.col('GRV_1d_IQR'))) \
-                                             .withColumn('GRV_60d_outlier', outliers_udf(F.col('GRV_60d_median'), F.col('GRV_60d_quantile75'), F.col('GRV_60d_IQR'))) \
-                                             .withColumn('TRV_1d_outlier', outliers_udf(F.col('TRV_1d_median'), F.col('TRV_1d_quantile75'), F.col('TRV_1d_IQR'))) \
-                                             .withColumn('TRV_60d_outlier', outliers_udf(F.col('TRV_60d_median'), F.col('TRV_60d_quantile75'), F.col('TRV_60d_IQR')))
+assessVariableOutliers = targetOutputTimelines.withColumn('ERV_3d_outlier', outliers_udf('ERV_3d_median','ERV_3d_quantile75','ERV_3d_IQR')) \
+                                             .withColumn('ERV_60d_outlier', outliers_udf('ERV_60d_median','ERV_60d_quantile75','ERV_60d_IQR')) \
+                                             .withColumn('GRV_1d_outlier', outliers_udf('GRV_1d_median','GRV_1d_quantile75','GRV_1d_IQR')) \
+                                             .withColumn('GRV_60d_outlier', outliers_udf('GRV_60d_median','GRV_60d_quantile75','GRV_60d_IQR')) \
+                                             .withColumn('TRV_1d_outlier', outliers_udf('TRV_1d_median','TRV_1d_quantile75','TRV_1d_IQR')) \
+                                             .withColumn('TRV_60d_outlier', outliers_udf('TRV_60d_median','TRV_60d_quantile75','TRV_60d_IQR'))
 # verify output data
 assessVariableOutliers = assessVariableOutliers.orderBy('EventTimeDate', ascending=False)
 print((assessVariableOutliers.count(), len(assessVariableOutliers.columns)))
