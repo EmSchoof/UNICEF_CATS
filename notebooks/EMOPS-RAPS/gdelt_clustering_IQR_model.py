@@ -86,6 +86,20 @@ preprocessedGDELT.limit(5).toPandas()
 
 # COMMAND ----------
 
+# DBTITLE 1,Create QuadClass, EventRooteCode Dataframe
+# get unique quadclass: eventcode pairs
+quadClassCodes = preprocessedGDELT.select('QuadClassString','EventRootCodeString').dropDuplicates()
+
+# Create distinct list of codes
+quadclass = quadClassCodes.select('QuadClassString').rdd.map(lambda r: r[0]).collect()
+eventcodes = quadClassCodes.select('EventRootCodeString').rdd.map(lambda r: r[0]).collect()
+
+# Create quadclass: eventcode dictionary
+cameo_quadclass_dict = dict(zip(eventcodes, quadclass))
+cameo_quadclass_dict
+
+# COMMAND ----------
+
 # MAGIC %md 
 # MAGIC ## Create Target Variables
 
@@ -264,6 +278,17 @@ assessVariableOutliers.select('ActionGeo_FullName','EventTimeDate','EventRootCod
                               'GRV_1d_outlier','GRV_60d_outlier',
                               'TRV_1d_outlier','TRV_60d_outlier'
                              ).limit(20).toPandas()
+
+# COMMAND ----------
+
+# DBTITLE 1,Map QuadClass back in to Dataframe
+# Map dictionary over df to create string column
+mapping_expr = F.create_map([F.lit(x) for x in chain(*cameo_quadclass_dict.items())])
+assessVariableOutliers = assessVariableOutliers.withColumn('QuadClassString', mapping_expr[F.col('EventRootCodeString')])
+
+# Confirm accurate output
+assessVariableOutliers.select('QuadClassString', 'EventRootCodeString').dropDuplicates().show()
+assessVariableOutliers.limit(1).toPandas()
 
 # COMMAND ----------
 
