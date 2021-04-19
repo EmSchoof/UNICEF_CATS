@@ -253,19 +253,18 @@ targetOutputTimelines.limit(3).toPandas()
 
 # COMMAND ----------
 
-def get_upper_outliers(val, upperQ, IQR):
+def get_upper_outliers(median, upperQ, IQR):
   mild_upper_outlier = upperQ + (IQR*1.5)
   extreme_upper_outlier = upperQ + (IQR*3)
-  string = ''
-  if (val >= mild_upper_outlier) and (val <= extreme_mild_outlier):
-     string = 'mild max outlier'
-  elif (val >= extreme_upper_outlier):
-    string = 'extreme max outlier'
+  
+  if (median >= mild_upper_outlier) and (median < extreme_upper_outlier):
+     return 'mild max outlier'
+  elif (median >= extreme_upper_outlier):
+    return 'extreme max outlier'
   else:
-    string = 'not max outlier'
-  return string
+     return 'not max outlier'
 
-outliers_udf = F.udf(lambda val, upperQ, IQR: get_upper_outliers(val, upperQ, IQR), StringType())
+outliers_udf = F.udf(get_upper_outliers, StringType())
 
 # COMMAND ----------
 
@@ -287,4 +286,13 @@ assessVariableOutliers.select('ActionGeo_FullName','EventTimeDate','EventRootCod
 
 # COMMAND ----------
 
-assessVariableOutliers.write.format('csv').option('header',True).mode('overwrite').option('sep',',').save('/Filestore/tables/tmp/gdelt/ALL_IQR_alertsystem_18april2021.csv')
+assessVariableOutliers.columns
+
+# COMMAND ----------
+
+cols = []
+assessVariableOutliersSelect = assessVariableOutliers.select(cols)
+
+# COMMAND ----------
+
+assessVariableOutliersSelect.write.format('csv').option('header',True).mode('overwrite').option('sep',',').save('/Filestore/tables/tmp/gdelt/ALL_IQR_alertsystem_19april2021.csv')
