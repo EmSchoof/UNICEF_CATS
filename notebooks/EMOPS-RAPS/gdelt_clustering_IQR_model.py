@@ -290,9 +290,9 @@ assessVariableOutliers.columns
 
 # COMMAND ----------
 
-#cols = []
-#assessVariableOutliersSelect = assessVariableOutliers.select(cols)
+cols = ['ActionGeo_FullName','EventTimeDate','QuadClassString','EventRootCodeString','avgConfidence','nArticles','GoldsteinReportValue','ToneReportValue','EventReportValue','ERV_3d_median','ERV_60d_median','GRV_1d_median','GRV_60d_median','TRV_1d_median','TRV_60d_median','ERV_3d_sampleN','ERV_3d_quantile25','ERV_3d_quantile75','ERV_3d_IQR','ERV_60d_sampleN','ERV_60d_quantile25','ERV_60d_quantile75','ERV_60d_IQR','GRV_1d_sampleN','GRV_1d_quantile25','GRV_1d_quantile75','GRV_1d_IQR','GRV_60d_sampleN','GRV_60d_quantile25','GRV_60d_quantile75','GRV_60d_IQR','TRV_1d_sampleN','TRV_1d_quantile25','TRV_1d_quantile75','TRV_1d_IQR','TRV_60d_sampleN','TRV_60d_quantile25','TRV_60d_quantile75','TRV_60d_IQR','ERV_3d_outlier','ERV_60d_outlier','GRV_1d_outlier','GRV_60d_outlier','TRV_1d_outlier','TRV_60d_outlier']
+assessVariableOutliersSelect = assessVariableOutliers.select(cols)
 
 # COMMAND ----------
 
-#assessVariableOutliersSelect.write.format('csv').option('header',True).mode('overwrite').option('sep',',').save('/Filestore/tables/tmp/gdelt/ALL_IQR_alertsystem_19april2021.csv')
+assessVariableOutliersSelect.write.format('csv').option('header',True).mode('overwrite').option('sep',',').save('/Filestore/tables/tmp/gdelt/ALL_IQR_alertsystem_19april2021.csv')
