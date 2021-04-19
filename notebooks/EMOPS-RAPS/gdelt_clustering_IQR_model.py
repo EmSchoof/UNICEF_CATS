@@ -80,21 +80,9 @@ preprocessedGDELT = spark.read.format("csv") \
   .option("inferSchema", infer_schema) \
   .option("header", first_row_is_header) \
   .option("sep", delimiter) \
-  .load("/Filestore/tables/tmp/gdelt/preprocessed.csv")
+  .load("/FileStore/tables/tmp/gdelt/preprocessed.csv")
 print((preprocessedGDELT.count(), len(preprocessedGDELT.columns)))
 preprocessedGDELT.limit(5).toPandas()
-
-# COMMAND ----------
-
-# DBTITLE 1,Select Data with Confidence of 40% or higher
-# create confidence column of more than 
-print(preprocessedGDELT.count())
-preprocessedGDELTcon40 = preprocessedGDELT.filter(F.col('Confidence') >= 40)
-print(preprocessedGDELTcon40.count())
-
-# convert datetime column to dates
-preprocessedGDELTcon40 = preprocessedGDELTcon40.withColumn('EventTimeDate', F.col('EventTimeDate').cast('date'))
-preprocessedGDELTcon40.limit(2).toPandas()
 
 # COMMAND ----------
 
@@ -291,9 +279,9 @@ assessVariableOutliersSelect = assessVariableOutliers.select(cols)
 # DBTITLE 1,Store as CSV for PowerBI
 import os
 
-TEMPORARY_TARGET="dbfs:/FileStore/tables/tmp/gdelt/ALL_IQR_alertsystem_19april2021"
-DESIRED_TARGET="dbfs:/FileStore/tables/tmp/gdelt/ALL_IQR_alertsystem_19april2021.csv"
+TEMPORARY_TARGET="dbfs:/Filestore/tables/tmp/gdelt/ALL_IQR_alertsystem_19april2021"
+DESIRED_TARGET="dbfs:/Filestore/tables/tmp/gdelt/ALL_IQR_alertsystem_19april2021.csv"
 
-assessVariableOutliersSelect.coalesce(1).write.option("header", "true").csv(TEMPORARY_TARGET)
+assessVariableOutliersSelect.coalesce(1).write.option("header", "true").mode('overwrite').csv(TEMPORARY_TARGET)
 temporary_csv = os.path.join(TEMPORARY_TARGET, dbutils.fs.ls(TEMPORARY_TARGET)[3][1])
 dbutils.fs.cp(temporary_csv, DESIRED_TARGET)
