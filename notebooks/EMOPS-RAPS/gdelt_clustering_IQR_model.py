@@ -80,46 +80,28 @@ preprocessedGDELT = spark.read.format("csv") \
   .option("inferSchema", infer_schema) \
   .option("header", first_row_is_header) \
   .option("sep", delimiter) \
-  .load("/Filestore/tables/tmp/gdelt/preprocessed.csv")
+  .load("/FileStore/tables/tmp/gdelt/preprocessed.csv")
 print((preprocessedGDELT.count(), len(preprocessedGDELT.columns)))
 preprocessedGDELT.limit(5).toPandas()
 
 # COMMAND ----------
 
-# DBTITLE 1,Select Data with Confidence of 40% or higher
-# create confidence column of more than 
-print(preprocessedGDELT.count())
-preprocessedGDELTcon40 = preprocessedGDELT.filter(F.col('Confidence') >= 40)
-print(preprocessedGDELTcon40.count())
+# DBTITLE 1,Create QuadClass, EventRooteCode Dataframe
+# get unique quadclass: eventcode pairs
+quadClassCodes = preprocessedGDELT.select('QuadClassString','EventRootCodeString').dropDuplicates()
 
-# convert datetime column to dates
-preprocessedGDELTcon40 = preprocessedGDELTcon40.withColumn('EventTimeDate', F.col('EventTimeDate').cast('date'))
-preprocessedGDELTcon40.limit(2).toPandas()
+# Create distinct list of codes
+quadclass = quadClassCodes.select('QuadClassString').rdd.map(lambda r: r[0]).collect()
+eventcodes = quadClassCodes.select('EventRootCodeString').rdd.map(lambda r: r[0]).collect()
+
+# Create quadclass: eventcode dictionary
+cameo_quadclass_dict = dict(zip(eventcodes, quadclass))
+cameo_quadclass_dict
 
 # COMMAND ----------
 
 # MAGIC %md 
-# MAGIC ### Create Target Variables
-# MAGIC - Calculate IQR for clusters 
-# MAGIC - Calculate IQR and IQR-Outlier for all countries
-# MAGIC - Calculate Power for Statistics
-
-# COMMAND ----------
-
-# DBTITLE 1,Create Rolling Windows
-# function to calculate number of seconds from number of days
-days = lambda i: i * 86400
-
-# --- for Creating Metrics ---
-
-# create a 1 day Window, 1 day previous to the current day (row), using previous casting of timestamp to long (number of seconds)
-rolling1d_window = Window.partitionBy('ActionGeo_FullName', 'EventRootCodeString').orderBy(F.col('EventTimeDate').cast('timestamp').cast('long')).rangeBetween(-days(1), 0)
-
-# create a 3 day Window, 3 days days previous to the current day (row), using previous casting of timestamp to long (number of seconds)
-rolling3d_window = Window.partitionBy('ActionGeo_FullName', 'EventRootCodeString').orderBy(F.col('EventTimeDate').cast('timestamp').cast('long')).rangeBetween(-days(3), 0)
-
-# create a 60 day Window, 60 days days previous to the current day (row), using previous casting of timestamp to long (number of seconds)
-rolling60d_window = Window.partitionBy('ActionGeo_FullName', 'EventRootCodeString').orderBy(F.col('EventTimeDate').cast('timestamp').cast('long')).rangeBetween(-days(60), 0)
+# MAGIC ## Create Target Variables
 
 # COMMAND ----------
 
@@ -128,14 +110,14 @@ rolling60d_window = Window.partitionBy('ActionGeo_FullName', 'EventRootCodeStrin
 median_udf = F.udf(lambda x: float(np.quantile(x, 0.5)), FloatType())
 
 # Create New Dataframe Column to Count Number of Daily Articles by Country by EventRootCode
-targetOutput = preprocessedGDELTcon40.groupBy('ActionGeo_FullName','EventTimeDate','EventRootCodeString') \
-                                     .agg(F.avg('Confidence').alias('avgConfidence'),
-                                          F.collect_list('GoldsteinScale').alias('GoldsteinList'),
-                                          F.collect_list('MentionDocTone').alias('ToneList'),
-                                          F.sum('nArticles').alias('nArticles')) \
-                                      .withColumn('GoldsteinReportValue', median_udf('GoldsteinList')) \
-                                      .withColumn('ToneReportValue', median_udf('ToneList')) \
-                                      .drop('GoldsteinList','ToneList')
+targetOutput = preprocessedGDELT.groupBy('ActionGeo_FullName','EventTimeDate','EventRootCodeString') \
+                                 .agg(F.avg('Confidence').alias('avgConfidence'),
+                                      F.collect_list('GoldsteinScale').alias('GoldsteinList'),
+                                      F.collect_list('MentionDocTone').alias('ToneList'),
+                                      F.sum('nArticles').alias('nArticles')) \
+                                  .withColumn('GoldsteinReportValue', median_udf('GoldsteinList')) \
+                                  .withColumn('ToneReportValue', median_udf('ToneList')) \
+                                  .drop('GoldsteinList','ToneList')
 
 # create a Window, country by date
 countriesDaily_window = Window.partitionBy('ActionGeo_FullName','EventTimeDate').orderBy('EventTimeDate')
@@ -147,19 +129,24 @@ targetOutputPartitioned.limit(2).toPandas()
 
 # COMMAND ----------
 
-# MAGIC %md
-# MAGIC ### Calculate IQR for 12 month and 24 month Windows
+# DBTITLE 1,Create Rolling Windows
+# function to calculate number of seconds from number of days
+days = lambda i: i * 86400
+
+# --- for Creating Metrics ---
+
+# create a 1 day Window, 1 day previous to the current day (row), using previous casting of timestamp to long (number of seconds)
+rolling1d_window = Window.partitionBy('ActionGeo_FullName','EventRootCodeString').orderBy(F.col('EventTimeDate').cast('timestamp').cast('long')).rangeBetween(-days(1), 0)
+
+# create a 3 day Window, 3 days days previous to the current day (row), using previous casting of timestamp to long (number of seconds)
+rolling3d_window = Window.partitionBy('ActionGeo_FullName','EventRootCodeString').orderBy(F.col('EventTimeDate').cast('timestamp').cast('long')).rangeBetween(-days(3), 0)
+
+# create a 60 day Window, 60 days days previous to the current day (row), using previous casting of timestamp to long (number of seconds)
+rolling60d_window = Window.partitionBy('ActionGeo_FullName','EventRootCodeString').orderBy(F.col('EventTimeDate').cast('timestamp').cast('long')).rangeBetween(-days(60), 0)
 
 # COMMAND ----------
 
-# DBTITLE 1,UDF Functions
-lowerQ_udf = F.udf(lambda x: float(np.quantile(x, 0.25)), FloatType())
-upperQ_udf = F.udf(lambda x: float(np.quantile(x, 0.75)), FloatType())
-IQR_udf = F.udf(lambda lowerQ, upperQ: (upperQ - lowerQ), FloatType())
-
-# COMMAND ----------
-
-# DBTITLE 1,Create IQR Values per Country per Date per Event Code
+# DBTITLE 1,Calculate Medians per Country per Date per QuadClass and Event Code
 # Events: 3d, 60d
 targetOutputPartitioned = targetOutputPartitioned.withColumn('ERV_3d_list', F.collect_list('EventReportValue').over(rolling3d_window)) \
                                                  .withColumn('ERV_3d_median', median_udf('ERV_3d_list'))  \
@@ -188,19 +175,27 @@ targetOutputPartitioned.limit(3).toPandas()
 
 # COMMAND ----------
 
-# DBTITLE 1,Create IQR Time Windows for 12 and 24 months
 # MAGIC %md
-# MAGIC #### Since this data only goes back 4 months, the time windows will not be accurate and will inevitably match. However, the formulation will proceed as follows:
+# MAGIC ## Create IQR Time Windows for 12 and 24 months
+# MAGIC 
+# MAGIC #### NOTE: Since this data only goes back 4 months, the time windows will not be accurate and will inevitably match. However, the formulation will proceed as follows:
 
 # COMMAND ----------
 
 # --- Windows for Evaluation Periods ---
 
 # create a 12 month Window, 12 months previous to the current day (row), using previous casting of timestamp to long (number of seconds)
-rolling12m_window = Window.partitionBy('ActionGeo_FullName', 'EventRootCodeString').orderBy(F.col('EventTimeDate').cast('timestamp').cast('long')).rangeBetween(-days(365), 0)
+rolling12m_window = Window.partitionBy('ActionGeo_FullName','EventRootCodeString').orderBy(F.col('EventTimeDate').cast('timestamp').cast('long')).rangeBetween(-days(365), 0)
 
 # create a 24 month Window, 24 months previous to the current day (row), using previous casting of timestamp to long (number of seconds)
-rolling24m_window = Window.partitionBy('ActionGeo_FullName', 'EventRootCodeString').orderBy(F.col('EventTimeDate').cast('timestamp').cast('long')).rangeBetween(-days(730), 0)
+rolling24m_window = Window.partitionBy('ActionGeo_FullName','EventRootCodeString').orderBy(F.col('EventTimeDate').cast('timestamp').cast('long')).rangeBetween(-days(730), 0)
+
+# COMMAND ----------
+
+# DBTITLE 1,UDF Functions
+lowerQ_udf = F.udf(lambda x: float(np.quantile(x, 0.25)), FloatType())
+upperQ_udf = F.udf(lambda x: float(np.quantile(x, 0.75)), FloatType())
+IQR_udf = F.udf(lambda lowerQ, upperQ: (upperQ - lowerQ), FloatType())
 
 # COMMAND ----------
 
@@ -253,19 +248,18 @@ targetOutputTimelines.limit(3).toPandas()
 
 # COMMAND ----------
 
-def get_upper_outliers(val, upperQ, IQR):
+def get_upper_outliers(median, upperQ, IQR):
   mild_upper_outlier = upperQ + (IQR*1.5)
   extreme_upper_outlier = upperQ + (IQR*3)
-  string = ''
-  if (val >= mild_upper_outlier) and (val <= extreme_mild_outlier):
-     string = 'mild max outlier'
-  elif (val >= extreme_upper_outlier):
-    string = 'extreme max outlier'
+  
+  if (median >= mild_upper_outlier) and (median < extreme_upper_outlier):
+     return 'mild max outlier'
+  elif (median >= extreme_upper_outlier):
+    return 'extreme max outlier'
   else:
-    string = 'not max outlier'
-  return string
+     return 'not max outlier'
 
-outliers_udf = F.udf(lambda val, upperQ, IQR: get_upper_outliers(val, upperQ, IQR), StringType())
+outliers_udf = F.udf(get_upper_outliers, StringType())
 
 # COMMAND ----------
 
@@ -287,4 +281,32 @@ assessVariableOutliers.select('ActionGeo_FullName','EventTimeDate','EventRootCod
 
 # COMMAND ----------
 
-assessVariableOutliers.write.format('csv').option('header',True).mode('overwrite').option('sep',',').save('/Filestore/tables/tmp/gdelt/ALL_IQR_alertsystem_18april2021.csv')
+# DBTITLE 1,Map QuadClass back in to Dataframe
+# Map dictionary over df to create string column
+mapping_expr = F.create_map([F.lit(x) for x in chain(*cameo_quadclass_dict.items())])
+assessVariableOutliers = assessVariableOutliers.withColumn('QuadClassString', mapping_expr[F.col('EventRootCodeString')])
+
+# Confirm accurate output
+assessVariableOutliers.select('QuadClassString', 'EventRootCodeString').dropDuplicates().show()
+assessVariableOutliers.limit(1).toPandas()
+
+# COMMAND ----------
+
+assessVariableOutliers.columns
+
+# COMMAND ----------
+
+cols = ['ActionGeo_FullName','EventTimeDate','QuadClassString','EventRootCodeString','avgConfidence','nArticles','GoldsteinReportValue','ToneReportValue','EventReportValue','ERV_3d_median','ERV_60d_median','GRV_1d_median','GRV_60d_median','TRV_1d_median','TRV_60d_median','ERV_3d_sampleN','ERV_3d_quantile25','ERV_3d_quantile75','ERV_3d_IQR','ERV_60d_sampleN','ERV_60d_quantile25','ERV_60d_quantile75','ERV_60d_IQR','GRV_1d_sampleN','GRV_1d_quantile25','GRV_1d_quantile75','GRV_1d_IQR','GRV_60d_sampleN','GRV_60d_quantile25','GRV_60d_quantile75','GRV_60d_IQR','TRV_1d_sampleN','TRV_1d_quantile25','TRV_1d_quantile75','TRV_1d_IQR','TRV_60d_sampleN','TRV_60d_quantile25','TRV_60d_quantile75','TRV_60d_IQR','ERV_3d_outlier','ERV_60d_outlier','GRV_1d_outlier','GRV_60d_outlier','TRV_1d_outlier','TRV_60d_outlier']
+assessVariableOutliersSelect = assessVariableOutliers.select(cols)
+
+# COMMAND ----------
+
+# DBTITLE 1,Store as CSV for PowerBI
+import os
+
+TEMPORARY_TARGET="dbfs:/Filestore/tables/tmp/gdelt/ALL_IQR_alertsystem_19april2021"
+DESIRED_TARGET="dbfs:/Filestore/tables/tmp/gdelt/ALL_IQR_alertsystem_19april2021.csv"
+
+assessVariableOutliersSelect.coalesce(1).write.option("header", "true").mode('overwrite').csv(TEMPORARY_TARGET)
+temporary_csv = os.path.join(TEMPORARY_TARGET, dbutils.fs.ls(TEMPORARY_TARGET)[3][1])
+dbutils.fs.cp(temporary_csv, DESIRED_TARGET)
