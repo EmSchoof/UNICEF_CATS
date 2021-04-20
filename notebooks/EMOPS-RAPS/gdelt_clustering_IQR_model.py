@@ -110,14 +110,14 @@ cameo_quadclass_dict
 median_udf = F.udf(lambda x: float(np.quantile(x, 0.5)), FloatType())
 
 # Create New Dataframe Column to Count Number of Daily Articles by Country by EventRootCode
-targetOutput = preprocessedGDELTcon40.groupBy('ActionGeo_FullName','EventTimeDate','EventRootCodeString') \
-                                     .agg(F.avg('Confidence').alias('avgConfidence'),
-                                          F.collect_list('GoldsteinScale').alias('GoldsteinList'),
-                                          F.collect_list('MentionDocTone').alias('ToneList'),
-                                          F.sum('nArticles').alias('nArticles')) \
-                                      .withColumn('GoldsteinReportValue', median_udf('GoldsteinList')) \
-                                      .withColumn('ToneReportValue', median_udf('ToneList')) \
-                                      .drop('GoldsteinList','ToneList')
+targetOutput = preprocessedGDELT.groupBy('ActionGeo_FullName','EventTimeDate','EventRootCodeString') \
+                                 .agg(F.avg('Confidence').alias('avgConfidence'),
+                                      F.collect_list('GoldsteinScale').alias('GoldsteinList'),
+                                      F.collect_list('MentionDocTone').alias('ToneList'),
+                                      F.sum('nArticles').alias('nArticles')) \
+                                  .withColumn('GoldsteinReportValue', median_udf('GoldsteinList')) \
+                                  .withColumn('ToneReportValue', median_udf('ToneList')) \
+                                  .drop('GoldsteinList','ToneList')
 
 # create a Window, country by date
 countriesDaily_window = Window.partitionBy('ActionGeo_FullName','EventTimeDate').orderBy('EventTimeDate')
