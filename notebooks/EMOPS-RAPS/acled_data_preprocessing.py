@@ -14,22 +14,43 @@ infer_schema = "true"
 first_row_is_header = "true"
 delimiter = ","
 
+# COMMAND ----------
+
+# import Africa conflict data
 acledAfrica = spark.read.format("csv") \
   .option("inferSchema", infer_schema) \
   .option("header", first_row_is_header) \
   .option("sep", delimiter) \
   .load("/FileStore/tables/tmp/Africa_1997_2021_Apr23.csv")
 print((acledAfrica.count(), len(acledAfrica.columns)))
-acledAfrica.limit(5).toPandas()
+acledAfrica.limit(3).toPandas()
+
+# COMMAND ----------
+
+# import Middle Easte conflict data
+acledME = spark.read.format("csv") \
+  .option("inferSchema", infer_schema) \
+  .option("header", first_row_is_header) \
+  .option("sep", delimiter) \
+  .load("/FileStore/tables/tmp/MiddleEast_2015_2021_Apr23.csv")
+print((acledME.count(), len(acledME.columns)))
+acledME.limit(3).toPandas()
+
+# COMMAND ----------
+
+# merge dataframes
+acledSelect = acledAfrica.union(acledME)
+print((acledSelect.count(), len(acledSelect.columns)))
+acledSelect.limit(3).toPandas()
 
 # COMMAND ----------
 
 # Select specific columns
 select_cols = ['COUNTRY','YEAR','EVENT_DATE','EVENT_TYPE','SUB_EVENT_TYPE']
-acledAfricaSelect = acledAfrica.select(select_cols)
-acledAfricaSelect = acledAfricaSelect.withColumn('nEvent', F.lit(1))
-print((acledAfricaSelect.count(), len(acledAfricaSelect.columns)))
-acledAfricaSelect.limit(5).toPandas()
+acledSelectCols = acledSelect.select(select_cols)
+acledSelectCols = acledSelectCols.withColumn('nEvent', F.lit(1))
+print((acledSelectCols.count(), len(acledSelectCols.columns)))
+acledSelectCols.limit(3).toPandas()
 
 # COMMAND ----------
 
@@ -47,35 +68,35 @@ final_struc = StructType(fields = data_schema)
 # COMMAND ----------
 
 # DBTITLE 1,Create DataFrame for Manipulation with Defined Schema
-acledAfricaRDD = sqlContext.createDataFrame(acledAfricaSelect.rdd, final_struc)
-acledAfricaRDD.limit(5).toPandas()
+acledRDD = sqlContext.createDataFrame(acledSelectCols.rdd, final_struc)
+acledRDD.limit(5).toPandas()
 
 # COMMAND ----------
 
 # DBTITLE 1,Assess Event Types and Sub Event Types
-eventTypes = acledAfricaRDD.select('EVENT_TYPE').groupBy('EVENT_TYPE').count() #'SUB_EVENT_TYPE'
+eventTypes = acledRDD.select('EVENT_TYPE').groupBy('EVENT_TYPE').count() #'SUB_EVENT_TYPE'
 eventTypes.toPandas()
 
 # COMMAND ----------
 
 # DBTITLE 0,Assess Event Types and Sub Event Types
-eventTypes = acledAfricaRDD.select('SUB_EVENT_TYPE').groupBy('SUB_EVENT_TYPE').count() #'EVENT_TYPE'
+eventTypes = acledRDD.select('SUB_EVENT_TYPE').groupBy('SUB_EVENT_TYPE').count() #'EVENT_TYPE'
 eventTypes.toPandas()
 
 # COMMAND ----------
 
 # DBTITLE 1,Drop rows with None
-acledAfricaRDD.describe().show()
+acledRDD.describe().show()
 
 # COMMAND ----------
 
-acledAfricaRDDNoNulls = acledAfricaRDD.na.drop(subset=select_cols)
-print((acledAfricaRDDNoNulls.count(), len(acledAfricaRDDNoNulls.columns)))
-acledAfricaRDDNoNulls.limit(5).toPandas()
+acledRDDNoNulls = acledRDD.na.drop(subset=select_cols)
+print((acledRDDNoNulls.count(), len(acledRDDNoNulls.columns)))
+acledRDDNoNulls.limit(5).toPandas()
 
 # COMMAND ----------
 
-acledAfricaRDDNoNulls.describe().show()
+acledRDDNoNulls.describe().show()
 
 # COMMAND ----------
 
@@ -85,13 +106,13 @@ from dateutil.parser import parse
 # Convert date-strings to date columns
 date_udf = F.udf(lambda d: parse(d), DateType())
 
-acledAfricaRDDNoNulls = acledAfricaRDDNoNulls.withColumn('EVENT_DATE', date_udf('EVENT_DATE'))
-acledAfricaRDDNoNulls.limit(2).toPandas()
+acledRDDNoNulls = acledRDDNoNulls.withColumn('EVENT_DATE', date_udf('EVENT_DATE'))
+acledRDDNoNulls.limit(2).toPandas()
 
 # COMMAND ----------
 
 # DBTITLE 1,Select Data from 2021
-acled2021 = acledAfricaRDDNoNulls.filter(F.col('YEAR') >= 2021)
+acled2021 = acledRDDNoNulls.filter(F.col('YEAR') >= 2021)
 acled2021.limit(2).toPandas()
 
 # COMMAND ----------
