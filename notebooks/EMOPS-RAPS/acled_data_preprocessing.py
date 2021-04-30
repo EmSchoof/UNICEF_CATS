@@ -132,12 +132,14 @@ min_date, max_date
 
 # COMMAND ----------
 
-acledPandas = acledTargetOutput.toPandas()
+acledPandas = acledTargetOutput.toPandas().groupby(['COUNTRY', 'EVENT_DATE'], as_index=False).agg({'nArticles' : 'sum'})
+acledPandas.head()
 
 # COMMAND ----------
 
 import numpy as np
-np.unique(acledPandas['COUNTRY'])
+countries = np.unique(acledPandas['COUNTRY'])
+countries
 
 # COMMAND ----------
 
@@ -145,7 +147,6 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 
 fig, ax = plt.subplots(figsize=(16, 24))
-
 sns.boxplot(data=acledPandas,
             x="nArticles",
             y="COUNTRY",
@@ -153,7 +154,14 @@ sns.boxplot(data=acledPandas,
 
 # COMMAND ----------
 
-
+for country in countries:
+  fig, ax = plt.subplots(figsize=(10, 6))
+  acledPandas.loc[ acledPandas['COUNTRY'] == country ].set_index('EVENT_DATE').plot(ax=ax)
+  ax.set(title="Conflict Articles Over Time in " + country,
+         xlabel="EVENT_DATE",
+         ylabel="nArticles")
+  ax.axhline(0, linestyle="dashed", color="black", alpha=0.5)
+  plt.show()
 
 # COMMAND ----------
 
