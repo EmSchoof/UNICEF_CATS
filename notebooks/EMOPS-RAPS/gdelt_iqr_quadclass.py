@@ -121,32 +121,30 @@ targetOutputPartitioned.limit(2).toPandas()
 
 # COMMAND ----------
 
+# explore quadclass 4 for last two months
+quadClassChange = targetOutputPartitioned.filter(F.col('QuadClassString') == 'Material Conflict')
+
+# create lag column 
+w = Window.partitionBy('ActionGeo_FullName').orderBy('YearMonth')
+quadClassChange = quadClassChange.withColumn('lead', F.lag(F.col('EventReportValue'), default=0).over(w))
+quadClassChange.limit(10).show()
+
+# COMMAND ----------
+
 df.withColumn('lead', f.lag('rating', 1).over(w)) \
   .withColumn('rating_diff', f.when(f.col('lead').isNotNull(), f.col('rating') - f.col('lead')).otherwise(f.lit(None)))
 
 # COMMAND ----------
 
-# explore quadclass 4 for last two months
-#quadClassChange = targetOutputPartitioned.filter(F.col('QuadClassString') == 'Material Conflict')
-
-# create lag column 
-#quadClassChange = quadClassChange.withColumn('lead', F.lag('EventReportValue', 1).over(countriesDaily_window))
-
 # Get month change for QuadClass 4
 monthChange_udf = F.udf(lambda m1, m2: (m2 - m1)/m1 , FloatType())
-quadClassChange = quadClassChange.withColumn('ERV_monthChange', F.when(F.col('lead').isNotNull(),
-                                                                       monthChange_udf(F.col('EventReportValue'), F.col('lead'))
-                                                                      ).otherwise('first'))
+quadClassChange = quadClassChange.withColumn('ERV_monthChange', monthChange_udf(F.col('EventReportValue'), F.col('lead')))
                                                                        
-quadClassChange.limit(5).toPandas()
+quadClassChange.limit(10).show()
 
 # COMMAND ----------
 
-
-
-# COMMAND ----------
-
-
+quadClassChange.limit(10).toPandas()
 
 # COMMAND ----------
 
