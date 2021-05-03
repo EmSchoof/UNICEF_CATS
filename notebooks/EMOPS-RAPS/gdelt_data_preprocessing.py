@@ -8,6 +8,10 @@ from pyspark.sql.types import *
 # COMMAND ----------
 
 # DBTITLE 1,Import Data from Big Query
+# import november
+bq_gdelt_nov = spark.read.format("bigquery").option("table",'unicef-gdelt.november2020.events-mentions').load()
+print('November 2020 Event-Mentions Data: ', (bq_gdelt_nov.count(), len(bq_gdelt_nov.columns)))
+
 # import december
 bq_gdelt_dec = spark.read.format("bigquery").option("table",'unicef-gdelt.december2020.events-mentions').load()
 print('December 2020 Event-Mentions Data: ', (bq_gdelt_dec.count(), len(bq_gdelt_dec.columns)))
@@ -24,13 +28,19 @@ print('February 2021 Event-Mentions Data: ', (bq_gdelt_feb.count(), len(bq_gdelt
 bq_gdelt_march = spark.read.format("bigquery").option("table",'unicef-gdelt.march2021.events-mentions').load()
 print('March 2021 Event-Mentions Data: ', (bq_gdelt_march.count(), len(bq_gdelt_march.columns)))
 
+# import april
+bq_gdelt_april = spark.read.format("bigquery").option("table",'unicef-gdelt.april2021.event-mentions-updated').load()
+print('April 2021 Event-Mentions Data: ', (bq_gdelt_april.count(), len(bq_gdelt_april.columns)))
+
 # COMMAND ----------
 
 # merge dataframes
-bq_gdelt1 = bq_gdelt_dec.union(bq_gdelt_jan)
+bq_gdelt0 = bq_gdelt_nov.union(bq_gdelt_dec)
+bq_gdelt1 = bq_gdelt0.union(bq_gdelt_jan)
 bq_gdelt2 = bq_gdelt1.union(bq_gdelt_feb)
-bq_gdelt = bq_gdelt2.union(bq_gdelt_march)
-print('December 2020 through March 2021 Event-Mentions Data: ', (bq_gdelt.count(), len(bq_gdelt.columns)))
+bq_gdelt3 = bq_gdelt2.union(bq_gdelt_march)
+bq_gdelt = bq_gdelt3.union(bq_gdelt_april)
+print('November 2020 through April 2021 Event-Mentions Data: ', (bq_gdelt.count(), len(bq_gdelt.columns)))
 bq_gdelt.limit(10).toPandas()
 
 # COMMAND ----------
@@ -134,7 +144,7 @@ count_missings(gdeltFeb)
 print('Original Dataframe: ', (gdeltFeb.count(), len(gdeltFeb.columns)))
 
 # drop Nulls in Integer Columns
-gdeltFebNoNulls1 = gdeltFeb.na.drop(subset=["GLOBALEVENTID","EventTimeDate","MentionTimeDate", "ActionGeo_CountryCode", "Confidence", "MentionDocTone", "EventRootCode", "QuadClass", "GoldsteinScale"])
+gdeltFebNoNulls1 = gdeltFeb.na.drop(subset=["GLOBALEVENTID","EventTimeDate", "ActionGeo_CountryCode", "Confidence", "MentionDocTone", "EventRootCode","GoldsteinScale"])
 
 # drop Nulls in string columns
 gdeltFebNoNulls = gdeltFebNoNulls1.where(F.col('ActionGeo_CountryCode').isNotNull())
@@ -406,4 +416,4 @@ outputPreprocessedGDELT.limit(10).toPandas()
 # COMMAND ----------
 
 # DBTITLE 1,Save DataFrame as CSV
-outputPreprocessedGDELT.write.format('csv').option('header',True).mode('overwrite').option('sep',',').save('/FileStore/tables/tmp/gdelt/preprocessed.csv')
+outputPreprocessedGDELT.write.format('csv').option('header',True).mode('overwrite').option('sep',',').save('/FileStore/tables/tmp/gdelt/preprocessed_may2021.csv')
