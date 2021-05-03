@@ -267,34 +267,34 @@ targetOutputTimelines.limit(3).toPandas()
 
 # COMMAND ----------
 
-def get_outliers(median, upperQ, IQR):
-  upper_outlier = upperQ + (IQR*1.5)
+def get_max_outliers(median, upperQ, IQR):
+  upper_limit = upperQ + (IQR*1.5)
   
-  if median > upper_outlier:
+  if median > upper_limit:
      return 'outlier (max)'
   else:
      return 'not outlier (max)'
     
-def get_lower_outliers(median, lowerQ, IQR):
-  lower_outlier = lowerQ - (IQR*1.5)
+def get_min_outliers(median, lowerQ, IQR):
+  lower_limit = lowerQ - (IQR*1.5)
   
-  if median < lower_outlier:
+  if median < lower_limit:
      return 'outlier (min)'
   else:
      return 'not outlier (min)'
 
-upper_outliers_udf = F.udf(get_upper_outliers, StringType())
-lower_outliers_udf = F.udf(get_lower_outliers, StringType())
+max_outliers_udf = F.udf(get_max_outliers, StringType())
+min_outliers_udf = F.udf(get_min_outliers, StringType())
 
 # COMMAND ----------
 
 # identify outliers
-assessVariableOutliers = targetOutputTimelines.withColumn('ERV_3m_outlier', upper_outliers_udf('EventReportValue','ERV_3d_quantile75','ERV_3d_3month_IQR')) \
-                                             .withColumn('ERV_6m_outlier', upper_outliers_udf('EventReportValue','ERV_60d_quantile75','ERV_60d_6month_IQR')) \
-                                             .withColumn('GRV_3m_outlier', lower_outliers_udf('GoldsteinReportValue','GRV_1d_quantile25','GRV_1d_3month_IQR')) \
-                                             .withColumn('GRV_6m_outlier', lower_outliers_udf('GoldsteinReportValue','GRV_60d_quantile25','GRV_60d_6month_IQR')) \
-                                             .withColumn('TRV_3m_outlier', lower_outliers_udf('ToneReportValue','TRV_1d_quantile25','TRV_1d_3month_IQR')) \
-                                             .withColumn('TRV_6m_outlier', lower_outliers_udf('ToneReportValue','TRV_60d_quantile25','TRV_60d_6month_IQR'))
+assessVariableOutliers = targetOutputTimelines.withColumn('ERV_3m_outlier', max_outliers_udf('EventReportValue','ERV_3d_quantile75','ERV_3d_3month_IQR')) \
+                                             .withColumn('ERV_6m_outlier', max_outliers_udf('EventReportValue','ERV_60d_quantile75','ERV_60d_6month_IQR')) \
+                                             .withColumn('GRV_3m_outlier', min_outliers_udf('GoldsteinReportValue','GRV_1d_quantile25','GRV_1d_3month_IQR')) \
+                                             .withColumn('GRV_6m_outlier', min_outliers_udf('GoldsteinReportValue','GRV_60d_quantile25','GRV_60d_6month_IQR')) \
+                                             .withColumn('TRV_3m_outlier', min_outliers_udf('ToneReportValue','TRV_1d_quantile25','TRV_1d_3month_IQR')) \
+                                             .withColumn('TRV_6m_outlier', min_outliers_udf('ToneReportValue','TRV_60d_quantile25','TRV_60d_6month_IQR'))
 # drop unnecessary columns
 assessVariableOutliers = assessVariableOutliers.drop('ERV_3d_3month_list', 'ERV_60d_6month_list',
                                                     'GRV_1d_3month_list', 'GRV_60d_6month_list',
