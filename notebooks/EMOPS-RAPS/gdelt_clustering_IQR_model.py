@@ -90,12 +90,8 @@ preprocessedGDELT.limit(5).toPandas()
 # get unique quadclass: eventcode pairs
 quadClassCodes = preprocessedGDELT.select('QuadClassString','EventRootCodeString').dropDuplicates()
 
-# Create distinct list of codes
-quadclass = quadClassCodes.select('QuadClassString').rdd.map(lambda r: r[0]).collect()
-eventcodes = quadClassCodes.select('EventRootCodeString').rdd.map(lambda r: r[0]).collect()
-
 # Create quadclass: eventcode dictionary
-cameo_quadclass_dict = dict(zip(eventcodes, quadclass))
+cameo_quadclass_dict = {row['EventRootCodeString']:row['QuadClassString'] for row in quadClassCodes.collect()}
 cameo_quadclass_dict
 
 # COMMAND ----------
@@ -135,43 +131,43 @@ days = lambda i: i * 86400
 
 # --- for Creating Metrics ---
 
-# # create a 1 day Window, 1 day previous to the current day (row), using previous casting of timestamp to long (number of seconds)
-# rolling1d_window = Window.partitionBy('ActionGeo_FullName','EventRootCodeString').orderBy(F.col('EventTimeDate').cast('timestamp').cast('long')).rangeBetween(-days(1), 0)
+# create a 1 day Window, 1 day previous to the current day (row), using previous casting of timestamp to long (number of seconds)
+rolling1d_window = Window.partitionBy('ActionGeo_FullName','EventRootCodeString').orderBy(F.col('EventTimeDate').cast('timestamp').cast('long')).rangeBetween(-days(1), 0)
 
-# # create a 3 day Window, 3 days days previous to the current day (row), using previous casting of timestamp to long (number of seconds)
-# rolling3d_window = Window.partitionBy('ActionGeo_FullName','EventRootCodeString').orderBy(F.col('EventTimeDate').cast('timestamp').cast('long')).rangeBetween(-days(3), 0)
+# create a 3 day Window, 3 days days previous to the current day (row), using previous casting of timestamp to long (number of seconds)
+rolling3d_window = Window.partitionBy('ActionGeo_FullName','EventRootCodeString').orderBy(F.col('EventTimeDate').cast('timestamp').cast('long')).rangeBetween(-days(3), 0)
 
-# # create a 60 day Window, 60 days days previous to the current day (row), using previous casting of timestamp to long (number of seconds)
-# rolling60d_window = Window.partitionBy('ActionGeo_FullName','EventRootCodeString').orderBy(F.col('EventTimeDate').cast('timestamp').cast('long')).rangeBetween(-days(60), 0)
+# create a 60 day Window, 60 days days previous to the current day (row), using previous casting of timestamp to long (number of seconds)
+rolling60d_window = Window.partitionBy('ActionGeo_FullName','EventRootCodeString').orderBy(F.col('EventTimeDate').cast('timestamp').cast('long')).rangeBetween(-days(60), 0)
 
 # COMMAND ----------
 
 # DBTITLE 1,Calculate Medians per Country per Date per QuadClass and Event Code
-# # Events: 3d, 60d
-# targetOutputPartitioned = targetOutputPartitioned.withColumn('ERV_3d_list', F.collect_list('EventReportValue').over(rolling3d_window)) \
-#                                                  .withColumn('ERV_3d_median', median_udf('ERV_3d_list'))  \
-#                                                  .withColumn('ERV_60d_list', F.collect_list('EventReportValue').over(rolling60d_window)) \
-#                                                  .withColumn('ERV_60d_median', median_udf('ERV_60d_list'))
+# Events: 3d, 60d
+targetOutputPartitioned = targetOutputPartitioned.withColumn('ERV_3d_list', F.collect_list('EventReportValue').over(rolling3d_window)) \
+                                                 .withColumn('ERV_3d_median', median_udf('ERV_3d_list'))  \
+                                                 .withColumn('ERV_60d_list', F.collect_list('EventReportValue').over(rolling60d_window)) \
+                                                 .withColumn('ERV_60d_median', median_udf('ERV_60d_list'))
 
-# # Goldstein: 1d, 60d
-# targetOutputPartitioned = targetOutputPartitioned.withColumn('GRV_1d_list', F.collect_list('GoldsteinReportValue').over(rolling1d_window)) \
-#                                                  .withColumn('GRV_1d_median', median_udf('GRV_1d_list'))  \
-#                                                  .withColumn('GRV_60d_list', F.collect_list('GoldsteinReportValue').over(rolling60d_window)) \
-#                                                  .withColumn('GRV_60d_median', median_udf('GRV_60d_list'))
+# Goldstein: 1d, 60d
+targetOutputPartitioned = targetOutputPartitioned.withColumn('GRV_1d_list', F.collect_list('GoldsteinReportValue').over(rolling1d_window)) \
+                                                 .withColumn('GRV_1d_median', median_udf('GRV_1d_list'))  \
+                                                 .withColumn('GRV_60d_list', F.collect_list('GoldsteinReportValue').over(rolling60d_window)) \
+                                                 .withColumn('GRV_60d_median', median_udf('GRV_60d_list'))
 
-# # Tone: 1d, 60d
-# targetOutputPartitioned = targetOutputPartitioned.withColumn('TRV_1d_list', F.collect_list('ToneReportValue').over(rolling1d_window)) \
-#                                                  .withColumn('TRV_1d_median', median_udf('TRV_1d_list'))  \
-#                                                  .withColumn('TRV_60d_list', F.collect_list('ToneReportValue').over(rolling60d_window)) \
-#                                                  .withColumn('TRV_60d_median', median_udf('TRV_60d_list'))
-# # drop unnecessary columns
-# targetOutputPartitioned = targetOutputPartitioned.drop('ERV_3d_list','ERV_60d_list','GRV_1d_list',
-#                                                        'GRV_60d_list','TRV_1d_list','TRV_60d_list') \
-#                                                  .orderBy('EventTimeDate', ascending=False)
+# Tone: 1d, 60d
+targetOutputPartitioned = targetOutputPartitioned.withColumn('TRV_1d_list', F.collect_list('ToneReportValue').over(rolling1d_window)) \
+                                                 .withColumn('TRV_1d_median', median_udf('TRV_1d_list'))  \
+                                                 .withColumn('TRV_60d_list', F.collect_list('ToneReportValue').over(rolling60d_window)) \
+                                                 .withColumn('TRV_60d_median', median_udf('TRV_60d_list'))
+# drop unnecessary columns
+targetOutputPartitioned = targetOutputPartitioned.drop('ERV_3d_list','ERV_60d_list','GRV_1d_list',
+                                                       'GRV_60d_list','TRV_1d_list','TRV_60d_list') \
+                                                 .orderBy('EventTimeDate', ascending=False)
 
-# # verify output data
-# print((targetOutputPartitioned.count(), len(targetOutputPartitioned.columns)))
-# targetOutputPartitioned.limit(3).toPandas()
+# verify output data
+print((targetOutputPartitioned.count(), len(targetOutputPartitioned.columns)))
+targetOutputPartitioned.limit(3).toPandas()
 
 # COMMAND ----------
 
@@ -199,14 +195,15 @@ IQR_udf = F.udf(lambda lowerQ, upperQ: (upperQ - lowerQ), FloatType())
 
 # COMMAND ----------
 
+# Proportion Articles: 3d, 60d
 # ERV_3d_median // ERV_60d_median
-targetOutputTimelines = targetOutputPartitioned.withColumn('ERV_3d_3month_list', F.collect_list('EventReportValue').over(rolling3m_window)) \
+targetOutputTimelines = targetOutputPartitioned.withColumn('ERV_3d_3month_list', F.collect_list('ERV_3d_median').over(rolling3m_window)) \
                                                .withColumn('ERV_3d_3month_median', median_udf('ERV_3d_3month_list'))  \
                                                .withColumn('ERV_3d_3month_sampleN',  F.size('ERV_3d_3month_list'))  \
                                                .withColumn('ERV_3d_quantile25', lowerQ_udf('ERV_3d_3month_list'))  \
                                                .withColumn('ERV_3d_quantile75', upperQ_udf('ERV_3d_3month_list'))  \
                                                .withColumn('ERV_3d_3month_IQR', IQR_udf(F.col('ERV_3d_quantile25'), F.col('ERV_3d_quantile75')))  \
-                                               .withColumn('ERV_60d_6month_list', F.collect_list('EventReportValue').over(rolling6m_window)) \
+                                               .withColumn('ERV_60d_6month_list', F.collect_list('ERV_60d_median').over(rolling6m_window)) \
                                                .withColumn('ERV_60d_6month_median', median_udf('ERV_60d_6month_list'))  \
                                                .withColumn('ERV_60d_6month_sampleN', F.size('ERV_60d_6month_list'))  \
                                                .withColumn('ERV_60d_quantile25', lowerQ_udf('ERV_60d_6month_list'))  \
@@ -215,13 +212,13 @@ targetOutputTimelines = targetOutputPartitioned.withColumn('ERV_3d_3month_list',
 
 # Goldstein: 1d, 60d
 # GRV_1d_median // GRV_60d_median
-targetOutputTimelines = targetOutputTimelines.withColumn('GRV_1d_3month_list', F.collect_list('GoldsteinReportValue').over(rolling3m_window)) \
+targetOutputTimelines = targetOutputTimelines.withColumn('GRV_1d_3month_list', F.collect_list('GRV_1d_median').over(rolling3m_window)) \
                                              .withColumn('GRV_1d_3month_median', median_udf('GRV_1d_3month_list'))  \
                                              .withColumn('GRV_1d_3month_sampleN',  F.size('GRV_1d_3month_list'))  \
                                              .withColumn('GRV_1d_quantile25', lowerQ_udf('GRV_1d_3month_list'))  \
                                              .withColumn('GRV_1d_quantile75', upperQ_udf('GRV_1d_3month_list'))  \
                                              .withColumn('GRV_1d_3month_IQR', IQR_udf(F.col('GRV_1d_quantile25'), F.col('GRV_1d_quantile75')))  \
-                                             .withColumn('GRV_60d_6month_list', F.collect_list('GoldsteinReportValue').over(rolling6m_window)) \
+                                             .withColumn('GRV_60d_6month_list', F.collect_list('GRV_60d_median').over(rolling6m_window)) \
                                              .withColumn('GRV_60d_6month_median', median_udf('GRV_60d_6month_list'))  \
                                              .withColumn('GRV_60d_6month_sampleN', F.size('GRV_60d_6month_list'))  \
                                              .withColumn('GRV_60d_quantile25', lowerQ_udf('GRV_60d_6month_list'))  \
@@ -229,13 +226,13 @@ targetOutputTimelines = targetOutputTimelines.withColumn('GRV_1d_3month_list', F
                                              .withColumn('GRV_60d_6month_IQR', IQR_udf(F.col('GRV_60d_quantile25'), F.col('GRV_60d_quantile75')))
 # Tone: 1d, 60d
 # TRV_1d_median // TRV_60d_median
-targetOutputTimelines = targetOutputTimelines.withColumn('TRV_1d_3month_list', F.collect_list('ToneReportValue').over(rolling3m_window)) \
+targetOutputTimelines = targetOutputTimelines.withColumn('TRV_1d_3month_list', F.collect_list('TRV_1d_median').over(rolling3m_window)) \
                                              .withColumn('TRV_1d_3month_median', median_udf('TRV_1d_3month_list'))  \
                                              .withColumn('TRV_1d_3month_sampleN', F.size('TRV_1d_3month_list'))  \
                                              .withColumn('TRV_1d_quantile25', lowerQ_udf('TRV_1d_3month_list'))  \
                                              .withColumn('TRV_1d_quantile75', upperQ_udf('TRV_1d_3month_list'))  \
                                              .withColumn('TRV_1d_3month_IQR', IQR_udf(F.col('TRV_1d_quantile25'), F.col('TRV_1d_quantile75')))  \
-                                             .withColumn('TRV_60d_6month_list', F.collect_list('ToneReportValue').over(rolling6m_window)) \
+                                             .withColumn('TRV_60d_6month_list', F.collect_list('TRV_60d_median').over(rolling6m_window)) \
                                              .withColumn('TRV_60d_6month_median', median_udf('TRV_60d_6month_list'))  \
                                              .withColumn('TRV_60d_6month_sampleN', F.size('TRV_60d_6month_list'))  \
                                              .withColumn('TRV_60d_quantile25', lowerQ_udf('TRV_60d_6month_list'))  \
@@ -248,17 +245,6 @@ targetOutputTimelines = targetOutputTimelines.withColumn('TRV_1d_3month_list', F
 targetOutputTimelines = targetOutputTimelines.orderBy('EventTimeDate', ascending=False)
 print((targetOutputTimelines.count(), len(targetOutputTimelines.columns)))
 targetOutputTimelines.limit(3).toPandas()
-
-# COMMAND ----------
-
-#targetOutputTimelines.select('GRV_60d_24month_list', 'TRV_60d_24month_list').limit(10).toPandas()
-
-# COMMAND ----------
-
-#.withColumn('GRV_60d_24month_list', F.collect_list('GRV_60d_median').over(rolling24m_window))
-
-#.withColumn('TRV_60d_24month_list', F.collect_list('TRV_60d_median').over(rolling24m_window))
-
 
 # COMMAND ----------
 
@@ -289,25 +275,31 @@ min_outliers_udf = F.udf(get_min_outliers, StringType())
 # COMMAND ----------
 
 # identify outliers
-assessVariableOutliers = targetOutputTimelines.withColumn('ERV_3m_outlier', max_outliers_udf('EventReportValue','ERV_3d_quantile75','ERV_3d_3month_IQR')) \
-                                             .withColumn('ERV_6m_outlier', max_outliers_udf('EventReportValue','ERV_60d_quantile75','ERV_60d_6month_IQR')) \
-                                             .withColumn('GRV_3m_outlier', min_outliers_udf('GoldsteinReportValue','GRV_1d_quantile25','GRV_1d_3month_IQR')) \
-                                             .withColumn('GRV_6m_outlier', min_outliers_udf('GoldsteinReportValue','GRV_60d_quantile25','GRV_60d_6month_IQR')) \
-                                             .withColumn('TRV_3m_outlier', min_outliers_udf('ToneReportValue','TRV_1d_quantile25','TRV_1d_3month_IQR')) \
-                                             .withColumn('TRV_6m_outlier', min_outliers_udf('ToneReportValue','TRV_60d_quantile25','TRV_60d_6month_IQR'))
+assessVariableOutliers = targetOutputTimelines.withColumn('ERV_3d_outlier', max_outliers_udf('ERV_3d_median','ERV_3d_quantile75','ERV_3d_3month_IQR')) \
+                                             .withColumn('ERV_60d_outlier', max_outliers_udf('ERV_60d_median','ERV_60d_quantile75','ERV_60d_6month_IQR')) \
+                                             .withColumn('GRV_1d_outlier', min_outliers_udf('GRV_1d_median','GRV_1d_quantile25','GRV_1d_3month_IQR')) \
+                                             .withColumn('GRV_60d_outlier', min_outliers_udf('GRV_60d_median','GRV_60d_quantile25','GRV_60d_6month_IQR')) \
+                                             .withColumn('TRV_1d_outlier', min_outliers_udf('TRV_1d_median','TRV_1d_quantile25','TRV_1d_3month_IQR')) \
+                                             .withColumn('TRV_60d_outlier', min_outliers_udf('TRV_60d_median','TRV_60d_quantile25','TRV_60d_6month_IQR'))
 # drop unnecessary columns
-assessVariableOutliers = assessVariableOutliers.drop('ERV_3d_3month_list', 'ERV_60d_6month_list',
-                                                    'GRV_1d_3month_list', 'GRV_60d_6month_list',
-                                                    'TRV_1d_3month_list', 'TRV_60d_6month_list')
+assessVariableOutliers = assessVariableOutliers.drop('ERV_3d_month_list', 'ERV_60d_month_list',
+                                                    'GRV_1d_month_list', 'GRV_60d_month_list',
+                                                    'TRV_1d_month_list', 'TRV_60d_month_list')
 
 # verify output data
 assessVariableOutliers = assessVariableOutliers.orderBy('EventTimeDate', ascending=False)
 print((assessVariableOutliers.count(), len(assessVariableOutliers.columns)))
 assessVariableOutliers.select('ActionGeo_FullName','EventTimeDate','EventRootCodeString','nArticles',
-                              'ERV_3m_outlier','ERV_6m_outlier',
-                              'GRV_3m_outlier','GRV_6m_outlier',
-                              'TRV_3m_outlier','TRV_6m_outlier'
+                              'ERV_3d_outlier','ERV_60d_outlier',
+                              'GRV_1d_outlier','GRV_60d_outlier',
+                              'TRV_1d_outlier','TRV_60d_outlier'
                              ).limit(2).toPandas()
+
+# COMMAND ----------
+
+assessVariableOutliers.select('ActionGeo_FullName','EventTimeDate','EventRootCodeString',
+                              'GRV_1d_median','GRV_1d_quantile25','GRV_1d_3month_IQR','GRV_1d_outlier'
+                             ).filter(F.col('GRV_1d_outlier') == 'outlier (min)').limit(50).toPandas()
 
 # COMMAND ----------
 
@@ -323,61 +315,6 @@ assessVariableOutliers.limit(1).toPandas()
 # COMMAND ----------
 
 assessVariableOutliers.columns
-
-# COMMAND ----------
-
-# DBTITLE 1,Create Separate DataFrames for Cleaner Output
-# # Event Report Value
-# evr_cols = ['ActionGeo_FullName','EventTimeDate','QuadClassString','EventRootCodeString','EventReportValue',
-#             'ERV_3d_median','ERV_3d_12month_median','ERV_3d_12month_sampleN', 'ERV_3d_outlier',
-#             'ERV_60d_median','ERV_60d_24month_median','ERV_60d_24month_sampleN','ERV_60d_outlier']
-
-# event_report_value = assessVariableOutliers.select(evr_cols)
-
-# # Rename columns for clean output
-# old_erv = event_report_value.schema.names
-# new_evr = ['Country','Event Date','Quad Class','CAMEO Root Code','EventReportValue',
-#            '3 Day Rolling Median','3 Day Median, Rolling 12month IQR', 'Sample Size, Rolling 12month IQR', '3 Day Median Outlier',
-#            '60 Day Rolling Median','60 Day Median, Rolling 24month IQR','Sample Size, Rolling 24month IQR','60 Day Median Outlier']
-
-# event_report_value_csv = reduce(lambda event_report_value, idx: event_report_value.withColumnRenamed(old_erv[idx], new_evr[idx]), range(len(old_erv)), event_report_value)
-# event_report_value_csv.limit(5).toPandas()
-
-# COMMAND ----------
-
-#  # Goldstein Report Value
-# gold_cols = ['ActionGeo_FullName','EventTimeDate','QuadClassString','EventRootCodeString','GoldsteinReportValue',
-#             'GRV_1d_median','GRV_1d_12month_median','GRV_1d_12month_sampleN', 'GRV_1d_outlier',
-#             'GRV_60d_median','GRV_60d_24month_median','GRV_60d_24month_sampleN','GRV_60d_outlier']
-
-# golstein_report_value = assessVariableOutliers.select(gold_cols)
-
-# # Rename columns for clean output
-# old_gold = golstein_report_value.schema.names
-# new_gold = ['Country','Event Date','Quad Class','CAMEO Root Code','GoldsteinReportValue',
-#            '1 Day Rolling Median','1 Day Median, Rolling 12month IQR', 'Sample Size, Rolling 12month IQR', '1 Day Median Outlier',
-#            '60 Day Rolling Median','60 Day Median, Rolling 24month IQR','Sample Size, Rolling 24month IQR','60 Day Median Outlier']
-
-# golstein_report_value_csv = reduce(lambda golstein_report_value, idx: golstein_report_value.withColumnRenamed(old_gold[idx], new_gold[idx]), range(len(old_gold)), golstein_report_value)
-# golstein_report_value_csv.limit(5).toPandas()
-
-# COMMAND ----------
-
-#  # Tone Report Value
-# tone_cols = ['ActionGeo_FullName','EventTimeDate','QuadClassString','EventRootCodeString','ToneReportValue',
-#             'TRV_1d_median','TRV_1d_12month_median','TRV_1d_12month_sampleN', 'TRV_1d_outlier',
-#             'TRV_60d_median','TRV_60d_24month_median','TRV_60d_24month_sampleN','TRV_60d_outlier']
-
-# tone_report_value = assessVariableOutliers.select(tone_cols)
-
-# # Rename columns for clean output
-# old_tone = tone_report_value.schema.names
-# new_tone = ['Country','Event Date','Quad Class','CAMEO Root Code','ToneReportValue',
-#            '1 Day Rolling Median','1 Day Median, Rolling 12month IQR', 'Sample Size, Rolling 12month IQR', '1 Day Median Outlier',
-#            '60 Day Rolling Median','60 Day Median, Rolling 24month IQR','Sample Size, Rolling 24month IQR','60 Day Median Outlier']
-
-# tone_report_value_csv = reduce(lambda tone_report_value, idx: tone_report_value.withColumnRenamed(old_tone[idx], new_tone[idx]), range(len(old_tone)), tone_report_value)
-# tone_report_value_csv.limit(5).toPandas()
 
 # COMMAND ----------
 
@@ -399,9 +336,9 @@ import os
 # COMMAND ----------
 
 cols = ['ActionGeo_FullName','EventTimeDate','QuadClassString','EventRootCodeString','nArticles',
-       'EventReportValue','ERV_3m_outlier','ERV_6m_outlier',
-       'GoldsteinReportValue','GRV_3m_outlier','GRV_6m_outlier',
-       'ToneReportValue','TRV_3m_outlier','TRV_6m_outlier']
+       'EventReportValue','ERV_3d_median','ERV_3d_outlier','ERV_60d_median','ERV_60d_outlier',
+       'GoldsteinReportValue','GRV_1d_median','GRV_1d_outlier','GRV_60d_median','GRV_60d_outlier',
+       'ToneReportValue','TRV_1d_median','TRV_1d_outlier','TRV_60d_median','TRV_60d_outlier']
 assessVariableOutliersSelect = assessVariableOutliers.select(cols)
 
 # select only february and beyond
@@ -413,8 +350,8 @@ powerBI.limit(10).toPandas()
 
 # DBTITLE 1,Clean Up Columns for Output
 # store to CSV
-TEMPORARY_BI_TARGET="dbfs:/Filestore/tables/tmp/gdelt/modified_IQR_alertsystem_02may2021"
-DESIRED_BI_TARGET="dbfs:/Filestore/tables/tmp/gdelt/modified_IQR_alertsystem_02may2021.csv"
+TEMPORARY_BI_TARGET="dbfs:/Filestore/tables/tmp/gdelt/shorter_IQR_alertsystem_03may2021"
+DESIRED_BI_TARGET="dbfs:/Filestore/tables/tmp/gdelt/shorter_IQR_alertsystem_03may2021.csv"
 
 powerBI.coalesce(1).write.option("header", "true").mode('overwrite').csv(TEMPORARY_BI_TARGET)
 temporaryPoweBI_csv = os.path.join(TEMPORARY_BI_TARGET, dbutils.fs.ls(TEMPORARY_BI_TARGET)[3][1])
