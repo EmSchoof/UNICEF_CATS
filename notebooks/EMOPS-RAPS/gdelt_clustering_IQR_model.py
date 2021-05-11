@@ -314,6 +314,24 @@ assessVariableOutliers.limit(1).toPandas()
 
 # COMMAND ----------
 
+# DBTITLE 1,Map UNICEF Regions in to Dataframe
+# source: country column
+unicef_countries = ["Afghanistan","Angola","Anguilla","Albania","United Arab Emirates","Argentina","Armenia","Antigua and Barbuda","Azerbaijan","Burundi","Benin","Burkina Faso","Bangladesh","Bulgaria","Bahrain","Bosnia-Herzegovina","Belarus","Belize","Bolivia","Brazil","Barbados","Bhutan","Botswana","Central African Republic","Chile","China","Côte d'Ivoire","Cameroon","DRC","ROC","Colombia","Comoros","Cape Verde","Costa Rica","Cuba","Djibouti","Dominica","Dominican Republic","Algeria","Ecuador","Egypt, Arab Rep.","Eritrea","Western Sahara","Ethiopia","Pacific Islands (Fiji)","Micronesia","Gabon","Georgia","Ghana","Guinea Conakry","Gambia, The","Guinea-Bissau","Equatorial Guinea","Grenada","Guatemala","Guyana","Honduras","Croatia","Haiti","Indonesia","India","Iran","Iraq","Jamaica","Jordan","Kazakhstan","Kenya","Kyrgyzstan","Cambodia","Kiribati","Saint Kitts and Nevis","Kuwait","Laos","Lebanon","Liberia","Libya","Saint Lucia","Sri Lanka","Lesotho","Morocco","Moldova","Madagascar","Maldives","Mexico","Marshall Islands","Macedonia","Mali","Myanmar","Montenegro","Mongolia","Mozambique","Mauritania","Montserrat","Malawi","Malaysia","Namibia","Niger","Nigeria","Nicaragua","Nepal ","Nauru","Oman","Pakistan","Panama","Peru","Philippines","Palau","Papua New Guinea","Korea, North","Paraguay","Palestine","Qatar","Kosovo","Romania","Rwanda","Saudi Arabia","Sudan","Senegal","Solomon Islands","Sierra Leone","El Salvador","Somalia","Serbia","South Sudan","Sao Tome and Principe","Suriname","Eswatini","Syria","Turks and Caicos","Chad","Togo","Thailand","Tajikistan","Tokelau","Turkmenistan","Timor-Leste","Tonga","Trinidad and Tobago", "Tunisia","Turkey","Tuvalu",
+"Tanzania","Uganda","Ukraine","Uruguay","Uzbekistan","Saint Vincent and the Grenadines","Venezuela","British Virgin Islands","Vietnam","Vanuatu","Samoa","Yemen","South Africa","Zambia","Zimbabwe"]
+
+# source: unicef region column
+unicef_region_ordered = ["ROSA", "ESARO", "LACRO", "ECARO", "MENARO", "LACRO", "ECARO", "LACRO", "ECARO", "ESARO", "WCARO", "WCARO", "ROSA", "ECARO", "MENARO", "WCARO", "ECARO", "LACRO", "LACRO", "LACRO", "LACRO", "ROSA", "ESARO", "WCARO", "LACRO", "EAPRO", "WCARO", "WCARO", "WCARO", "WCARO", "LACRO", "ESARO", "WCARO", "LACRO", "LACRO", "MENARO", "LACRO", "LACRO", "MENARO", "LACRO", "MENARO", "ESARO", "MENARO", "ESARO", "EAPRO", "EAPRO", "WCARO", "ECARO", "WCARO", "WCARO", "WCARO", "WCARO", "WCARO", "LACRO", "LACRO", "LACRO", "LACRO", "ECARO", "LACRO", "EAPRO", "ROSA", "MENARO", "MENARO", "LACRO", "MENARO", "ECARO", "ESARO", "ECARO", "EAPRO", "EAPRO", "LACRO", "MENARO", "EAPRO", "MENARO", "WCARO", "MENARO", "LACRO", "ROSA", "ESARO", "MENARO", "ECARO", "ESARO", "ROSA", "LACRO", "EAPRO", "ECARO", "WCARO", "EAPRO", "ECARO", "EAPRO", "ESARO", "WCARO", "LACRO", "ESARO", "EAPRO", "ESARO", "WCARO", "WCARO", "LACRO", "ROSA", "EAPRO", "MENARO", "ROSA", "LACRO", "LACRO", "EAPRO", "EAPRO", "EAPRO", "EAPRO", "LACRO", "MENARO", "MENARO", "ECARO", "ECARO", "ESARO", "MENARO", "MENARO", "WCARO", "EAPRO", "WCARO", "LACRO", "ESARO", "ECARO", "ESARO", "WCARO", "LACRO", "ESARO", "MENARO", "LACRO", "WCARO", "WCARO", "EAPRO", "ECARO", "EAPRO", "ECARO", "EAPRO", "EAPRO", "LACRO", "MENARO", "ECARO", "EAPRO", "ESARO", "ESARO", "ECARO", "LACRO", "ECARO", "LACRO", "LACRO", "LACRO", "EAPRO", "EAPRO", "EAPRO", "MENARO", "ESARO", "ESARO", "ESARO"]
+
+# Create Country: Country Region dictionary
+country_cluster_dict = dict(zip(unicef_countries, unicef_region_ordered))
+
+# Map dictionary over df to create string column
+mapping_expr = F.create_map([F.lit(x) for x in chain(*country_cluster_dict.items())])
+assessVariableOutliers = assessVariableOutliers.withColumn('UNICEF_regions', mapping_expr[F.col('ActionGeo_FullName')])
+assessVariableOutliers.limit(1).toPandas()
+
+# COMMAND ----------
+
 assessVariableOutliers.columns
 
 # COMMAND ----------
@@ -335,7 +353,7 @@ import os
 
 # COMMAND ----------
 
-cols = ['ActionGeo_FullName','EventTimeDate','QuadClassString','EventRootCodeString','nArticles',
+cols = ['ActionGeo_FullName','UNICEF_regions','EventTimeDate','QuadClassString','EventRootCodeString','nArticles',
        'EventReportValue','ERV_3d_median','ERV_3d_outlier','ERV_60d_median','ERV_60d_outlier',
        'GoldsteinReportValue','GRV_1d_median','GRV_1d_outlier','GRV_60d_median','GRV_60d_outlier',
        'ToneReportValue','TRV_1d_median','TRV_1d_outlier','TRV_60d_median','TRV_60d_outlier']
@@ -350,8 +368,8 @@ powerBI.limit(10).toPandas()
 
 # DBTITLE 1,Clean Up Columns for Output
 # store to CSV
-TEMPORARY_BI_TARGET="dbfs:/Filestore/tables/tmp/gdelt/shorter_IQR_alertsystem_03may2021"
-DESIRED_BI_TARGET="dbfs:/Filestore/tables/tmp/gdelt/shorter_IQR_alertsystem_03may2021.csv"
+TEMPORARY_BI_TARGET="dbfs:/Filestore/tables/tmp/gdelt/shorter_IQR_alertsystem_regions_10may2021"
+DESIRED_BI_TARGET="dbfs:/Filestore/tables/tmp/gdelt/shorter_IQR_alertsystem_regions_10may2021.csv"
 
 powerBI.coalesce(1).write.option("header", "true").mode('overwrite').csv(TEMPORARY_BI_TARGET)
 temporaryPoweBI_csv = os.path.join(TEMPORARY_BI_TARGET, dbutils.fs.ls(TEMPORARY_BI_TARGET)[3][1])
