@@ -1,0 +1,206 @@
+
+
+CREATE PROCEDURE catsDASHBOARD
+USE cats;
+
+-- GET EVENT, GOLDSTEIN, AND TONE REPORT VALUES 
+SELECT 
+  ActionGeo_CountryCode,
+  EventDate,
+  EventRootCode,
+  COUNT(*) / SUM(COUNT(*)) OVER (PARTITION BY ActionGeo_CountryCode, EventDate ORDER BY EventDate) AS EventReportValue,
+  AVG(CAST([GoldsteinScale] AS FLOAT)) AS GoldsteinReportValue,
+  AVG(CAST([MentionDocTone] AS FLOAT)) AS ToneReportValue, 
+  COUNT(*) AS nArticles 
+INTO #BaseVariables
+FROM vw_context_trend_alert_f1000
+GROUP BY ActionGeo_CountryCode,
+          EventDate,
+          EventRootCode
+
+
+-- GET ROLLING 3 DAY MEDIANS
+WITH CTE
+AS
+(
+SELECT  *,
+        ROW_NUMBER() OVER( PARTITION BY ActionGeo_CountryCode, EventRootCode ORDER BY EventDate ROWS BETWEEN 2 PRECEDING AND CURRENT ROW) row_num
+FROM #MedianVariables
+)
+
+SELECT 
+        *,
+        ISNULL((
+                SELECT  CASE
+                            --When there is only one previous value at row_num = 2, find Mean of first two codes
+                            WHEN A.row_num = 2 THEN (LAG(B.EventReportValue,1) OVER (ORDER BY [EventReportValue]) + B.EventReportValue)/2.0
+
+                            --Else find middle code value of current and previous two rows
+                            ELSE B.EventReportValue
+                        END
+                FROM CTE B 
+                WHERE B.row_num BETWEEN A.row_num - 2 AND A.row_num 
+
+                ORDER BY B.[EventReportValue] 
+
+                -- Order by code and offset by 1 so don't select the lowest value, but fetch the one above the lowest value
+                OFFSET 1 ROW FETCH NEXT 1 ROW ONLY),
+        0) AS ERV_3d_median,
+        ISNULL((
+                SELECT  CASE
+                            --When there is only one previous value at row_num = 2, find Mean of first two codes
+                            WHEN A.row_num = 2 THEN (LAG(B.Goldstein,1) OVER (ORDER BY [Goldstein]) + B.Goldstein)/2.0
+
+                            --Else find middle code value of current and previous two rows
+                            ELSE B.Goldstein
+                        END
+                FROM CTE B 
+                WHERE B.row_num BETWEEN A.row_num - 2 AND A.row_num 
+
+                ORDER BY B.[Goldstein] 
+
+                -- Order by code and offset by 1 so don't select the lowest value, but fetch the one above the lowest value
+                OFFSET 1 ROW FETCH NEXT 1 ROW ONLY),
+        0) AS GRV_3d_median,
+        ISNULL((
+                SELECT  CASE
+                            --When there is only one previous value at row_num = 2, find Mean of first two codes
+                            WHEN A.row_num = 2 THEN (LAG(B.ToneReportValue,1) OVER (ORDER BY [ToneReportValue]) + B.ToneReportValue)/2.0
+
+                            --Else find middle code value of current and previous two rows
+                            ELSE B.ToneReportValue
+                        END
+                FROM CTE B 
+                WHERE B.row_num BETWEEN A.row_num - 2 AND A.row_num 
+
+                ORDER BY B.[ToneReportValue] 
+
+                -- Order by code and offset by 1 so don't select the lowest value, but fetch the one above the lowest value
+                OFFSET 1 ROW FETCH NEXT 1 ROW ONLY),
+        0) AS TRV_3d_median,
+INTO #3DMedianVariables
+FROM #BaseVariables
+
+
+-- GET ROLLING 60 DAY MEDIANS
+WITH CTE
+AS
+(
+SELECT  *,
+        ROW_NUMBER() OVER( PARTITION BY ActionGeo_CountryCode, EventRootCode ORDER BY EventDate ROWS BETWEEN 59 PRECEDING AND CURRENT ROW) row_num
+FROM #3DMedianVariables
+)
+
+SELECT 
+        *,
+        ISNULL((
+                SELECT  CASE
+                            --When there is only one previous value at row_num = 2, find Mean of first two codes
+                            WHEN A.row_num = 2 THEN (LAG(B.EventReportValue,1) OVER (ORDER BY [EventReportValue]) + B.EventReportValue)/2.0
+
+                            --Else find middle code value of current and previous two rows
+                            ELSE B.EventReportValue
+                        END
+                FROM CTE B 
+                WHERE B.row_num BETWEEN A.row_num - 2 AND A.row_num 
+
+                ORDER BY B.[EventReportValue] 
+
+                -- Order by code and offset by 1 so don't select the lowest value, but fetch the one above the lowest value
+                OFFSET 1 ROW FETCH NEXT 1 ROW ONLY),
+        0) AS ERV_60d_median,
+        ISNULL((
+                SELECT  CASE
+                            --When there is only one previous value at row_num = 2, find Mean of first two codes
+                            WHEN A.row_num = 2 THEN (LAG(B.Goldstein,1) OVER (ORDER BY [Goldstein]) + B.Goldstein)/2.0
+
+                            --Else find middle code value of current and previous two rows
+                            ELSE B.Goldstein
+                        END
+                FROM CTE B 
+                WHERE B.row_num BETWEEN A.row_num - 2 AND A.row_num 
+
+                ORDER BY B.[Goldstein] 
+
+                -- Order by code and offset by 1 so don't select the lowest value, but fetch the one above the lowest value
+                OFFSET 1 ROW FETCH NEXT 1 ROW ONLY),
+        0) AS GRV_60d_median,
+        ISNULL((
+                SELECT  CASE
+                            --When there is only one previous value at row_num = 2, find Mean of first two codes
+                            WHEN A.row_num = 2 THEN (LAG(B.ToneReportValue,1) OVER (ORDER BY [ToneReportValue]) + B.ToneReportValue)/2.0
+
+                            --Else find middle code value of current and previous two rows
+                            ELSE B.ToneReportValue
+                        END
+                FROM CTE B 
+                WHERE B.row_num BETWEEN A.row_num - 2 AND A.row_num 
+
+                ORDER BY B.[ToneReportValue] 
+
+                -- Order by code and offset by 1 so don't select the lowest value, but fetch the one above the lowest value
+                OFFSET 1 ROW FETCH NEXT 1 ROW ONLY),
+        0) AS TRV_60d_median,
+INTO #60DMedianVariables
+FROM #3DMedianVariables
+
+
+
+
+
+
+
+
+
+
+WITH iqrs AS ( -- GET VARIABLE IQRs
+
+SELECT 
+*,
+(ERV_3d_75 - ERV_3d_25) AS ERV_3d_IQR,
+(ERV_60d_75 - ERV_60d_25) AS ERV_60d_IQR,
+(GRV_3d_75 - GRV_3d_25) AS GRV_3d_IQR,
+(GRV_60d_75 - GRV_60d_25) AS GRV_60d_IQR,
+(TRV_3d_75 - TRV_3d_25) AS TRV_3d_IQR,
+(TRV_60d_75 - TRV_60d_25) AS TRV_60d_IQR
+
+FROM (-- GET VARIABLE UPPER AND LOWER LIMITS
+SELECT 
+*,
+Percentile_Cont(0.25) WITHIN GROUP(Order By ERV_3d_median) OVER( PARTITION BY ActionGeo_CountryCode, EventRootCode ORDER BY EventDate ROWS BETWEEN 364 PRECEDING AND CURRENT ROW)
+        AS ERV_3d_25,
+Percentile_Cont(0.75) WITHIN GROUP(Order By ERV_3d_median) OVER( PARTITION BY ActionGeo_CountryCode, EventRootCode ORDER BY EventDate ROWS BETWEEN 364 PRECEDING AND CURRENT ROW)
+        AS ERV_3d_75,
+Percentile_Cont(0.25) WITHIN GROUP(Order By ERV_60_median) OVER( PARTITION BY ActionGeo_CountryCode, EventRootCode ORDER BY EventDate ROWS BETWEEN 729 PRECEDING AND CURRENT ROW)
+        AS ERV_60d_25,
+Percentile_Cont(0.75) WITHIN GROUP(Order By ERV_60_median) OVER( PARTITION BY ActionGeo_CountryCode, EventRootCode ORDER BY EventDate ROWS BETWEEN 729 PRECEDING AND CURRENT ROW)
+        AS ERV_60d_75,
+
+Percentile_Cont(0.25) WITHIN GROUP(Order By GRV_3d_median) OVER( PARTITION BY ActionGeo_CountryCode, EventRootCode ORDER BY EventDate ROWS BETWEEN 364 PRECEDING AND CURRENT ROW)
+        AS GRV_3d_25,
+Percentile_Cont(0.75) WITHIN GROUP(Order By GRV_3d_median) OVER( PARTITION BY ActionGeo_CountryCode, EventRootCode ORDER BY EventDate ROWS BETWEEN 364 PRECEDING AND CURRENT ROW)
+        AS GRV_3d_75,
+Percentile_Cont(0.25) WITHIN GROUP(Order By GRV_60d_median) OVER( PARTITION BY ActionGeo_CountryCode, EventRootCode ORDER BY EventDate ROWS BETWEEN 729 PRECEDING AND CURRENT ROW)
+        AS GRV_60d_25,
+Percentile_Cont(0.75) WITHIN GROUP(Order By GRV_60d_median) OVER( PARTITION BY ActionGeo_CountryCode, EventRootCode ORDER BY EventDate ROWS BETWEEN 729 PRECEDING AND CURRENT ROW)
+        AS GRV_60d_75,
+
+Percentile_Cont(0.25) WITHIN GROUP(Order By TRV_3d_median) OVER( PARTITION BY ActionGeo_CountryCode, EventRootCode ORDER BY EventDate ROWS BETWEEN 364 PRECEDING AND CURRENT ROW)
+        AS TRV_3d_25,
+Percentile_Cont(0.75) WITHIN GROUP(Order By TRV_3d_median) OVER( PARTITION BY ActionGeo_CountryCode, EventRootCode ORDER BY EventDate ROWS BETWEEN 364 PRECEDING AND CURRENT ROW)
+        AS TRV_3d_75,
+Percentile_Cont(0.25) WITHIN GROUP(Order By TRV_60d_median) OVER( PARTITION BY ActionGeo_CountryCode, EventRootCode ORDER BY EventDate ROWS BETWEEN 729 PRECEDING AND CURRENT ROW)
+        AS TRV_60d_25,
+Percentile_Cont(0.75) WITHIN GROUP(Order By TRV_60d_median) OVER( PARTITION BY ActionGeo_CountryCode, EventRootCode ORDER BY EventDate ROWS BETWEEN 729 PRECEDING AND CURRENT ROW)
+        AS TRV_60d_75
+
+FROM cats.vw_variable_median
+
+
+
+
+GO
+
+
+
+
