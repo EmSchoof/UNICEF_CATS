@@ -48,36 +48,24 @@ SELECT
         0) AS ERV_3d_median,
         ISNULL((
                 SELECT  CASE
-                            --When there is only one previous value at row_num = 2, find Mean of first two codes
                             WHEN A.row_num = 2 THEN (LAG(B.Goldstein,1) OVER (ORDER BY [Goldstein]) + B.Goldstein)/2.0
-
-                            --Else find middle code value of current and previous two rows
                             ELSE B.Goldstein
                         END
                 FROM CTE B 
                 WHERE B.row_num BETWEEN A.row_num - 2 AND A.row_num 
-
                 ORDER BY B.[Goldstein] 
-
-                -- Order by code and offset by 1 so don't select the lowest value, but fetch the one above the lowest value
                 OFFSET 1 ROW FETCH NEXT 1 ROW ONLY),
         0) AS GRV_3d_median,
         ISNULL((
                 SELECT  CASE
-                            --When there is only one previous value at row_num = 2, find Mean of first two codes
                             WHEN A.row_num = 2 THEN (LAG(B.ToneReportValue,1) OVER (ORDER BY [ToneReportValue]) + B.ToneReportValue)/2.0
-
-                            --Else find middle code value of current and previous two rows
                             ELSE B.ToneReportValue
                         END
                 FROM CTE B 
                 WHERE B.row_num BETWEEN A.row_num - 2 AND A.row_num 
-
                 ORDER BY B.[ToneReportValue] 
-
-                -- Order by code and offset by 1 so don't select the lowest value, but fetch the one above the lowest value
                 OFFSET 1 ROW FETCH NEXT 1 ROW ONLY),
-        0) AS TRV_3d_median,
+        0) AS TRV_3d_median
 INTO #3DMedianVariables
 FROM #BaseVariables
 
@@ -95,52 +83,35 @@ SELECT
         *,
         ISNULL((
                 SELECT  CASE
-                            --When there is only one previous value at row_num = 2, find Mean of first two codes
                             WHEN A.row_num = 2 THEN (LAG(B.EventReportValue,1) OVER (ORDER BY [EventReportValue]) + B.EventReportValue)/2.0
-
-                            --Else find middle code value of current and previous two rows
                             ELSE B.EventReportValue
                         END
                 FROM CTE B 
                 WHERE B.row_num BETWEEN A.row_num - 2 AND A.row_num 
-
                 ORDER BY B.[EventReportValue] 
-
-                -- Order by code and offset by 1 so don't select the lowest value, but fetch the one above the lowest value
                 OFFSET 1 ROW FETCH NEXT 1 ROW ONLY),
         0) AS ERV_60d_median,
         ISNULL((
                 SELECT  CASE
-                            --When there is only one previous value at row_num = 2, find Mean of first two codes
                             WHEN A.row_num = 2 THEN (LAG(B.Goldstein,1) OVER (ORDER BY [Goldstein]) + B.Goldstein)/2.0
-
-                            --Else find middle code value of current and previous two rows
                             ELSE B.Goldstein
                         END
                 FROM CTE B 
                 WHERE B.row_num BETWEEN A.row_num - 2 AND A.row_num 
-
                 ORDER BY B.[Goldstein] 
-
-                -- Order by code and offset by 1 so don't select the lowest value, but fetch the one above the lowest value
                 OFFSET 1 ROW FETCH NEXT 1 ROW ONLY),
         0) AS GRV_60d_median,
         ISNULL((
                 SELECT  CASE
-                            --When there is only one previous value at row_num = 2, find Mean of first two codes
                             WHEN A.row_num = 2 THEN (LAG(B.ToneReportValue,1) OVER (ORDER BY [ToneReportValue]) + B.ToneReportValue)/2.0
-
-                            --Else find middle code value of current and previous two rows
                             ELSE B.ToneReportValue
                         END
                 FROM CTE B 
                 WHERE B.row_num BETWEEN A.row_num - 2 AND A.row_num 
 
                 ORDER BY B.[ToneReportValue] 
-
-                -- Order by code and offset by 1 so don't select the lowest value, but fetch the one above the lowest value
                 OFFSET 1 ROW FETCH NEXT 1 ROW ONLY),
-        0) AS TRV_60d_median,
+        0) AS TRV_60d_median
 INTO #60DMedianVariables
 FROM #3DMedianVariables
 
