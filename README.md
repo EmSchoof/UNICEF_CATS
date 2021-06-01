@@ -16,4 +16,4 @@ Contextual Alert and Trend System (CATS) is a proof of concept (POC) for an auto
 ![CATS ALERT MODEL LUCID CHART](images/CATS_alert_model.png)
 
 ### Final Automatic Data Pipeline
-![CATS AUTOMATIC PIPELINE](images/CATS_final_pipeline.png)
+![CATS AUTOMATIC PIPELINE](images/CATS_final_pipeline.jpeg)
