@@ -15,7 +15,7 @@ from pyspark.sql.window import Window
 
 # COMMAND ----------
 
-test
+
 
 # COMMAND ----------
 
@@ -86,7 +86,7 @@ myPySparkP.limit(2).toPandas()
 # COMMAND ----------
 
 # Only select data for Jan through Feb 2021  
-selectData = myPySparkP.select('ActionGeo_FullName','EventDate','EventRootCode','EventReportValue','nArticles') \
+selectData = myPySparkP.select('ActionGeo_FullName','EventDate','EventRootCode','EventReportValue','GoldsteinReportValue','ToneReportValue','nArticles') \
                       .filter(F.col('EventDate').between(F.lit('2021-01-01'), F.lit('2021-02-13')))
 selectData.limit(10).toPandas()
 
@@ -101,15 +101,41 @@ microsoftDF = selectData
 
 # COMMAND ----------
 
+selectData = selectData.withColumnRenamed('ActionGeo_FullName', 'Countries') \
+                       .withColumnRenamed('EventReportValue', 'p_EventReportValue') \
+                       .withColumnRenamed('GoldsteinReportValue', 'p_GoldsteinReportValue') \
+                       .withColumnRenamed('ToneReportValue', 'p_ToneReportValue') \
+                        .withColumnRenamed('nArticles', 'p_nArticles')
+
+microsoftDF= microsoftDF.withColumnRenamed('ActionGeo_FullName', 'Countries') \
+                        .withColumnRenamed('EventReportValue', 'm_EventReportValue') \
+                        .withColumnRenamed('GoldsteinReportValue', 'm_GoldsteinReportValue') \
+                        .withColumnRenamed('ToneReportValue', 'm_ToneReportValue') \
+                        .withColumnRenamed('nArticles', 'm_nArticles')
+
+# COMMAND ----------
+
 # DBTITLE 1,Merge on Country, Date, Event Code (outter)
-col_list=["ActionGeo_FullName","EventDate","EventRootCode"]
-compareOutput = selectData.withColumnRenamed('EventReportValue', 'p_EventReportValue') \
-                           .join( microsoftDF.withColumnRenamed('EventReportValue', 'm_EventReportValue'), 
-                                 col_list,
-                                 how='full')
-compareOutput = compareOutput.withColumn('Difference', (F.col('p_EventReportValue') - F.col('m_EventReportValue')))
+col_list=["Countries","EventDate","EventRootCode"]
+compareOutput = selectData.join( microsoftDF, col_list, how='full')
+compareOutput = compareOutput.withColumn('a_difference', (F.col('p_nArticles') - F.col('m_nArticles')))
+compareOutput = compareOutput.withColumn('e_difference', (F.col('p_EventReportValue') - F.col('m_EventReportValue')))
+compareOutput = compareOutput.withColumn('g_difference', (F.col('p_GoldsteinReportValue') - F.col('m_GoldsteinReportValue')))
+compareOutput = compareOutput.withColumn('t_difference', (F.col('p_ToneReportValue') - F.col('m_ToneReportValue')))
 compareOutput.limit(10).toPandas()
 
 # COMMAND ----------
 
-display(compareOutput.select('p_EventReportValue', 'm_EventReportValue', 'Difference'))
+display(compareOutput.select('p_EventReportValue', 'm_EventReportValue', 'e_difference'))
+
+# COMMAND ----------
+
+display(compareOutput.select('p_GoldsteinReportValue', 'm_GoldsteinReportValue', 'g_difference'))
+
+# COMMAND ----------
+
+display(compareOutput.select('p_ToneReportValue', 'm_ToneReportValue', 't_difference'))
+
+# COMMAND ----------
+
+display(compareOutput.select('p_nArticles', 'm_nArticles', 'a_difference'))
