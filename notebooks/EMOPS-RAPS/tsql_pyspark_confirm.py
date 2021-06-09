@@ -62,6 +62,14 @@ myPySpark.limit(5).toPandas()
 
 # COMMAND ----------
 
+# select only conflict events 
+conflict_codes = ['Investigate','Demand','Disapprove','Reject','Threaten','Reduce Relations',
+                  'Exhibit Force Posture','Protest','Coerce','Assault','Fight',
+                  'Use of Unconventional Mass Violence']
+myPySpark = myPySpark.filter( (F.col('EventRootCode').isin(conflict_codes)) & F.col('EventDate').between(F.lit('2021-01-01'), F.lit('2021-02-13')))
+
+# COMMAND ----------
+
 # create function to calculate median
 median_udf = F.udf(lambda x: float(np.quantile(x, 0.5)), FloatType())
 
@@ -86,8 +94,7 @@ myPySparkP.limit(2).toPandas()
 # COMMAND ----------
 
 # Only select data for Jan through Feb 2021  
-selectData = myPySparkP.select('ActionGeo_FullName','EventDate','EventRootCode','EventReportValue','GoldsteinReportValue','ToneReportValue','nArticles') \
-                      .filter(F.col('EventDate').between(F.lit('2021-01-01'), F.lit('2021-02-13')))
+selectData = myPySparkP.select('ActionGeo_FullName','EventDate','EventRootCode','EventReportValue','GoldsteinReportValue','ToneReportValue','nArticles')
 selectData.limit(10).toPandas()
 
 # COMMAND ----------
@@ -139,3 +146,7 @@ display(compareOutput.select('p_ToneReportValue', 'm_ToneReportValue', 't_differ
 # COMMAND ----------
 
 display(compareOutput.select('p_nArticles', 'm_nArticles', 'a_difference'))
+
+# COMMAND ----------
+
+selectData.filter( (F.col('Countries') == 'Afghanistan') & (F.col('EventDate') == F.lit('2021-01-01'))).toPandas()
