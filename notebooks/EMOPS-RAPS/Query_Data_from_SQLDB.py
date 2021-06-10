@@ -200,9 +200,9 @@ def get_lower_outliers(median, lowerQ, IQR):
   mild_lower_outlier = lowerQ - (IQR*1.5)
   extreme_lower_outlier = lowerQ - (IQR*3)
 
-  if (median >= mild_lower_outlier) and (median < extreme_lower_outlier):
+  if (median <= mild_lower_outlier) and (median > extreme_lower_outlier):
      return 'mild outlier'
-  elif (median >= extreme_lower_outlier):
+  elif (median <= extreme_lower_outlier):
     return 'extreme outlier'
   else:
      return 'not outlier'
@@ -255,15 +255,22 @@ assessVariableOutliers.limit(10).toPandas()
 
 # COMMAND ----------
 
+min_date, max_date = assessVariableOutliers.select(F.min('EventDate'), F.max('EventDate')).first()
+min_date, max_date
+
+# COMMAND ----------
+
 # DBTITLE 1,Get Data for PowerBI
 cols = ['ActionGeo_CountryName','UNICEF_regions','EventDate','QuadClass','EventRootCode','nArticles',
        'EventReportValue','ERV_3d_Median','ERV_3d_MaxOutlier','ERV_60d_Median','ERV_60d_MaxOutlier',
-       'GoldsteinReportValue','GRV_1d_Median','GRV_1d_MinOutlier','GRV_60d_Median','GRV_60d_MinOutlier',
-       'ToneReportValue','TRV_1d_Median','TRV_1d_MinOutlier','TRV_60d_Median','TRV_60d_MinOutlier']
+       'GoldsteinReportValue','GRV_3d_Median','GRV_3d_MinOutlier','GRV_60d_Median','GRV_60d_MinOutlier',
+       'ToneReportValue','TRV_3d_Median','TRV_3d_MinOutlier','TRV_60d_Median','TRV_60d_MinOutlier']
 
 assessVariableOutliersSelect = assessVariableOutliers.select(cols)
-
-# select data
-#powerBI = assessVariableOutliersSelect.withColumn('EventDate', F.col('EventDate').cast('date'))
-#powerBI = assessVariableOutliersSelect.filter(F.col('EventTimeDate') >= F.lit('2021-03-01'))
 assessVariableOutliersSelect.limit(10).toPandas()
+
+# COMMAND ----------
+
+# DBTITLE 1,Output to CSV for Data Upload to PowerBI
+powerBI = assessVariableOutliersSelect.filter(F.col('EventDate') >= F.lit('2021-02-01'))
+powerBI.write.format('csv').option('header',True).mode('overwrite').option('sep',',').save('/FileStore/tables/tmp/gdelt/msql_cats_dashboard_june2021.csv')
