@@ -55,8 +55,8 @@ median_udf = F.udf(lambda x: float(np.quantile(x, 0.5)), FloatType())
 # Create New Dataframe Column to Count Number of Daily Articles by Country by EventRootCode
 targetOutput = table_df.groupBy('ActionGeo_CountryName','EventDate','EventRootCode') \
                          .agg(F.avg('Confidence').alias('avgConfidence'),
-                              F.avg('GoldsteinScale').alias('GoldsteinList'),
-                              F.avg('MentionDocTone').alias('ToneList'),
+                              F.avg('GoldsteinScale').alias('GoldsteinReportValue'),
+                              F.avg('MentionDocTone').alias('ToneReportValue'),
                               F.count(F.lit(1)).alias('nArticles'))
 
 # create a Window, country by date
@@ -151,13 +151,11 @@ targetOutputTimelines = targetOutputTimelines.withColumn('GRV_3d_12m_list', F.co
 # TRV_3d_12m_Average // TRV_60d_24m_Average
 targetOutputTimelines = targetOutputTimelines.withColumn('TRV_3d_12m_list', F.collect_list('TRV_3d_Average').over(rolling12m_window)) \
                                              .withColumn('TRV_3d_12m_Average', F.avg('TRV_3d_12m_list'))  \
-                                             .withColumn('TRV_3d_12m_sampleN', F.size('TRV_3d_12m_list'))  \
                                              .withColumn('TRV_3d_12m_quantile25', lowerQ_udf('TRV_3d_12m_list'))  \
                                              .withColumn('TRV_3d_12m_quantile75', upperQ_udf('TRV_3d_12m_list'))  \
                                              .withColumn('TRV_3d_12m_IQR', IQR_udf(F.col('TRV_3d_12m_quantile25'), F.col('TRV_3d_12m_quantile75')))  \
                                              .withColumn('TRV_60d_24m_list', F.collect_list('TRV_60d_Average').over(rolling6m_window)) \
                                              .withColumn('TRV_60d_24m_Average', F.avg('TRV_60d_24m_list'))  \
-                                             .withColumn('TRV_60d_24m_sampleN', F.size('TRV_60d_24m_list'))  \
                                              .withColumn('TRV_60d_24m_quantile25', lowerQ_udf('TRV_60d_24m_list'))  \
                                              .withColumn('TRV_60d_24m_quantile75', upperQ_udf('TRV_60d_24m_list')) \
                                              .withColumn('TRV_60d_24m_IQR', IQR_udf(F.col('TRV_60d_24m_quantile25'), F.col('TRV_60d_24m_quantile75')))
