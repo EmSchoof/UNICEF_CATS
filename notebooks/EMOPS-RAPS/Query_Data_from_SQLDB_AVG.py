@@ -58,7 +58,7 @@ countriesDaily_window = Window.partitionBy('ActionGeo_CountryName','EventDate').
 # get daily distribution of articles for each Event Code string within Window
 targetOutputPartitioned = targetOutput.withColumn('EventReportValue', F.col('nArticles')/F.sum('nArticles').over(countriesDaily_window))
 print((targetOutputPartitioned.count(), len(targetOutputPartitioned.columns)))
-targetOutputPartitioned.limit(2).toPandas()
+#targetOutputPartitioned.limit(2).toPandas()
 
 # COMMAND ----------
 
@@ -92,8 +92,8 @@ targetOutputPartitioned = targetOutputPartitioned.withColumn('TRV_3d_Average', F
 targetOutputPartitioned = targetOutputPartitioned.orderBy('EventDate', ascending=False)
 
 # verify output data
-print((targetOutputPartitioned.count(), len(targetOutputPartitioned.columns)))
-targetOutputPartitioned.limit(3).toPandas()
+#print((targetOutputPartitioned.count(), len(targetOutputPartitioned.columns)))
+#targetOutputPartitioned.limit(3).toPandas()
 
 # COMMAND ----------
 
@@ -148,8 +148,8 @@ targetOutputTimelines = targetOutputTimelines.withColumn('TRV_3d_12m_list', F.co
                                              .withColumn('TRV_60d_24m_IQR', IQR_udf(F.col('TRV_60d_24m_quantile25'), F.col('TRV_60d_24m_quantile75')))
 # verify output data
 targetOutputTimelines = targetOutputTimelines.orderBy('EventDate', ascending=False)
-print((targetOutputTimelines.count(), len(targetOutputTimelines.columns)))
-targetOutputTimelines.limit(3).toPandas()
+#print((targetOutputTimelines.count(), len(targetOutputTimelines.columns)))
+#targetOutputTimelines.limit(3).toPandas()
 
 # COMMAND ----------
 
@@ -191,12 +191,12 @@ assessVariableOutliers = targetOutputTimelines.withColumn('ERV_3d_MaxOutlier', m
 
 # verify output data
 assessVariableOutliers = assessVariableOutliers.orderBy('EventDate', ascending=False)
-print((assessVariableOutliers.count(), len(assessVariableOutliers.columns)))
-assessVariableOutliers.select('ActionGeo_CountryName','EventDate','EventRootCode','nArticles',
-                              'ERV_3d_MaxOutlier','ERV_60d_MaxOutlier',
-                              'GRV_3d_MinOutlier','GRV_60d_MinOutlier',
-                              'TRV_3d_MinOutlier','TRV_60d_MinOutlier'
-                             ).limit(10).toPandas()
+# print((assessVariableOutliers.count(), len(assessVariableOutliers.columns)))
+# assessVariableOutliers.select('ActionGeo_CountryName','EventDate','EventRootCode','nArticles',
+#                               'ERV_3d_MaxOutlier','ERV_60d_MaxOutlier',
+#                               'GRV_3d_MinOutlier','GRV_60d_MinOutlier',
+#                               'TRV_3d_MinOutlier','TRV_60d_MinOutlier'
+#                              ).limit(10).toPandas()
 
 # COMMAND ----------
 
@@ -216,7 +216,7 @@ quadClass_mapping_expr = F.create_map([F.lit(x) for x in chain(*quadClass_dict.i
 # Map dictionary over df to create string column
 assessVariableOutliers = assessVariableOutliers.withColumn('UNICEF_regions', regions_mapping_expr[F.col('ActionGeo_CountryName')])
 assessVariableOutliers = assessVariableOutliers.withColumn('QuadClass', quadClass_mapping_expr[F.col('EventRootCode')])
-assessVariableOutliers.limit(10).toPandas()
+#assessVariableOutliers.limit(10).toPandas()
 
 # COMMAND ----------
 
@@ -232,7 +232,7 @@ cols = ['ActionGeo_CountryName','UNICEF_regions','EventDate','QuadClass','EventR
        'ToneReportValue','TRV_3d_Average','TRV_3d_MinOutlier','TRV_60d_Average','TRV_60d_MinOutlier']
 
 assessVariableOutliersSelect = assessVariableOutliers.select(cols)
-assessVariableOutliersSelect.limit(10).toPandas()
+#assessVariableOutliersSelect.limit(10).toPandas()
 
 # COMMAND ----------
 
