@@ -36,11 +36,8 @@ connectionProperties = {
 
 # DBTITLE 1,Get all data from table in SQL DB
 table_df = spark.read.jdbc(url=jdbcUrl, table="cats.vw_ContextTrendAlert", properties=connectionProperties)
-
-# COMMAND ----------
-
-table_df = table_df.withColumn('GoldsteinScale', table_df['GoldsteinScale'].cast(IntegerType()))
-table_df = table_df.withColumn('MentionDocTone', table_df['MentionDocTone'].cast(IntegerType()))
+table_df = table_df.withColumn('GoldsteinScale', table_df['GoldsteinScale'].cast(IntegerType())) \
+                   .withColumn('MentionDocTone', table_df['MentionDocTone'].cast(IntegerType()))
 
 # COMMAND ----------
 
@@ -223,8 +220,8 @@ assessVariableOutliers.limit(10).toPandas()
 
 # COMMAND ----------
 
-min_date, max_date = assessVariableOutliers.select(F.min('EventDate'), F.max('EventDate')).first()
-min_date, max_date
+#min_date, max_date = assessVariableOutliers.select(F.min('EventDate'), F.max('EventDate')).first()
+#min_date, max_date
 
 # COMMAND ----------
 
@@ -240,15 +237,15 @@ assessVariableOutliersSelect.limit(10).toPandas()
 # COMMAND ----------
 
 # DBTITLE 1,Output to CSV for Data Upload to PowerBI
-powerBI = assessVariableOutliersSelect.filter(F.col('EventDate') >= F.lit('2021-02-01'))
+# powerBI = assessVariableOutliersSelect.filter(F.col('EventDate') >= F.lit('2021-02-01'))
 
-import os
-TEMPORARY_BI_TARGET="dbfs:/FileStore/tables/tmp/gdelt/msql_cats_avg_dashboard_june2021"
-DESIRED_BI_TARGET="dbfs:/FileStore/tables/tmp/gdelt/msql_cats_avg_dashboard_june2021.csv"
+# import os
+# TEMPORARY_BI_TARGET="dbfs:/FileStore/tables/tmp/gdelt/msql_cats_avg_dashboard_june2021"
+# DESIRED_BI_TARGET="dbfs:/FileStore/tables/tmp/gdelt/msql_cats_avg_dashboard_june2021.csv"
 
-powerBI.coalesce(1).write.option("header", "true").mode('overwrite').csv(TEMPORARY_BI_TARGET)
-temporaryPoweBI_csv = os.path.join(TEMPORARY_BI_TARGET, dbutils.fs.ls(TEMPORARY_BI_TARGET)[3][1])
-dbutils.fs.cp(temporaryPoweBI_csv, DESIRED_BI_TARGET)
+# powerBI.coalesce(1).write.option("header", "true").mode('overwrite').csv(TEMPORARY_BI_TARGET)
+# temporaryPoweBI_csv = os.path.join(TEMPORARY_BI_TARGET, dbutils.fs.ls(TEMPORARY_BI_TARGET)[3][1])
+# dbutils.fs.cp(temporaryPoweBI_csv, DESIRED_BI_TARGET)
 
 # COMMAND ----------
 
