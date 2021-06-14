@@ -44,10 +44,6 @@ table_df = table_df.withColumn('MentionDocTone', table_df['MentionDocTone'].cast
 
 # COMMAND ----------
 
-display(table_df)
-
-# COMMAND ----------
-
 # DBTITLE 1,Calculate Medians and Target Variables
 # create function to calculate median
 median_udf = F.udf(lambda x: float(np.quantile(x, 0.5)), FloatType())
@@ -125,12 +121,10 @@ IQR_udf = F.udf(lambda lowerQ, upperQ: (upperQ - lowerQ), FloatType())
 # Proportion Articles: 3d, 60d
 # ERV_3d_12m_Average // ERV_60d_24m_Average
 targetOutputTimelines = targetOutputPartitioned.withColumn('ERV_3d_12m_list', F.collect_list('ERV_3d_Average').over(rolling12m_window)) \
-                                               .withColumn('ERV_3d_12m_12m_Average', F.avg('ERV_3d_12m_list'))  \
                                                .withColumn('ERV_3d_12m_quantile25', lowerQ_udf('ERV_3d_12m_list'))  \
                                                .withColumn('ERV_3d_12m_quantile75', upperQ_udf('ERV_3d_12m_list'))  \
                                                .withColumn('ERV_3d_12m_IQR', IQR_udf(F.col('ERV_3d_12m_quantile25'), F.col('ERV_3d_12m_quantile75')))  \
-                                               .withColumn('ERV_60d_24m_list', F.collect_list('ERV_60d_Average').over(rolling6m_window)) \
-                                               .withColumn('ERV_60d_24m_24m_Average', F.avg('ERV_60d_24m_list'))  \
+                                               .withColumn('ERV_60d_24m_list', F.collect_list('ERV_60d_Average').over(rolling24m_window)) \
                                                .withColumn('ERV_60d_24m_quantile25', lowerQ_udf('ERV_60d_24m_list'))  \
                                                .withColumn('ERV_60d_24m_quantile75', upperQ_udf('ERV_60d_24m_list')) \
                                                .withColumn('ERV_60d_24m_IQR', IQR_udf(F.col('ERV_60d_24m_quantile25'), F.col('ERV_60d_24m_quantile75')))
@@ -138,24 +132,20 @@ targetOutputTimelines = targetOutputPartitioned.withColumn('ERV_3d_12m_list', F.
 # Goldstein: 3d, 60d
 # GRV_3d_12m_Average // GRV_60d_24m_Average
 targetOutputTimelines = targetOutputTimelines.withColumn('GRV_3d_12m_list', F.collect_list('GRV_3d_Average').over(rolling12m_window)) \
-                                             .withColumn('GRV_3d_12m_Average', F.avg('GRV_3d_12m_list'))  \
                                              .withColumn('GRV_3d_12m_quantile25', lowerQ_udf('GRV_3d_12m_list'))  \
                                              .withColumn('GRV_3d_12m_quantile75', upperQ_udf('GRV_3d_12m_list'))  \
                                              .withColumn('GRV_3d_12m_IQR', IQR_udf(F.col('GRV_3d_12m_quantile25'), F.col('GRV_3d_12m_quantile75')))  \
-                                             .withColumn('GRV_60d_24m_list', F.collect_list('GRV_60d_Average').over(rolling6m_window)) \
-                                             .withColumn('GRV_60d_24m_Average', F.avg('GRV_60d_24m_list'))  \
+                                             .withColumn('GRV_60d_24m_list', F.collect_list('GRV_60d_Average').over(rolling24m_window)) \
                                              .withColumn('GRV_60d_24m_quantile25', lowerQ_udf('GRV_60d_24m_list'))  \
                                              .withColumn('GRV_60d_24m_quantile75', upperQ_udf('GRV_60d_24m_list')) \
                                              .withColumn('GRV_60d_24m_IQR', IQR_udf(F.col('GRV_60d_24m_quantile25'), F.col('GRV_60d_24m_quantile75')))
 # Tone: 3d, 60d
 # TRV_3d_12m_Average // TRV_60d_24m_Average
 targetOutputTimelines = targetOutputTimelines.withColumn('TRV_3d_12m_list', F.collect_list('TRV_3d_Average').over(rolling12m_window)) \
-                                             .withColumn('TRV_3d_12m_Average', F.avg('TRV_3d_12m_list'))  \
                                              .withColumn('TRV_3d_12m_quantile25', lowerQ_udf('TRV_3d_12m_list'))  \
                                              .withColumn('TRV_3d_12m_quantile75', upperQ_udf('TRV_3d_12m_list'))  \
                                              .withColumn('TRV_3d_12m_IQR', IQR_udf(F.col('TRV_3d_12m_quantile25'), F.col('TRV_3d_12m_quantile75')))  \
-                                             .withColumn('TRV_60d_24m_list', F.collect_list('TRV_60d_Average').over(rolling6m_window)) \
-                                             .withColumn('TRV_60d_24m_Average', F.avg('TRV_60d_24m_list'))  \
+                                             .withColumn('TRV_60d_24m_list', F.collect_list('TRV_60d_Average').over(rolling24m_window)) \
                                              .withColumn('TRV_60d_24m_quantile25', lowerQ_udf('TRV_60d_24m_list'))  \
                                              .withColumn('TRV_60d_24m_quantile75', upperQ_udf('TRV_60d_24m_list')) \
                                              .withColumn('TRV_60d_24m_IQR', IQR_udf(F.col('TRV_60d_24m_quantile25'), F.col('TRV_60d_24m_quantile75')))
@@ -259,3 +249,21 @@ DESIRED_BI_TARGET="dbfs:/FileStore/tables/tmp/gdelt/msql_cats_avg_dashboard_june
 powerBI.coalesce(1).write.option("header", "true").mode('overwrite').csv(TEMPORARY_BI_TARGET)
 temporaryPoweBI_csv = os.path.join(TEMPORARY_BI_TARGET, dbutils.fs.ls(TEMPORARY_BI_TARGET)[3][1])
 dbutils.fs.cp(temporaryPoweBI_csv, DESIRED_BI_TARGET)
+
+# COMMAND ----------
+
+# DBTITLE 1,Output ALL to CSV
+#powerBI = assessVariableOutliersSelect.filter(F.col('EventDate') >= F.lit('2021-02-01'))
+
+TEMPORARY_BI_TARGET="dbfs:/FileStore/tables/tmp/gdelt/ALL_msql_cats_avg_dashboard_june2021"
+DESIRED_BI_TARGET="dbfs:/FileStore/tables/tmp/gdelt/ALL_msql_cats_avg_dashboard_june2021.csv"
+
+assessVariableOutliersSelect.coalesce(1).write.option("header", "true").mode('overwrite').csv(TEMPORARY_BI_TARGET)
+temporaryPoweBI_csv = os.path.join(TEMPORARY_BI_TARGET, dbutils.fs.ls(TEMPORARY_BI_TARGET)[3][1])
+dbutils.fs.cp(temporaryPoweBI_csv, DESIRED_BI_TARGET)
+
+# COMMAND ----------
+
+# DBTITLE 1,Output to SQL Database
+# create CATS Dashboard 
+assessVariableOutliersSelect.write.jdbc(url=jdbcUrl, table='CATS_Outlier_Dashboard', properties=connectionProperties, mode='overwrite')
