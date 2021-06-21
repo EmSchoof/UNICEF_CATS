@@ -36,15 +36,8 @@ connectionProperties = {
 
 # DBTITLE 1,Get all data from table in SQL DB
 table_df = spark.read.jdbc(url=jdbcUrl, table="cats.vw_ContextTrendAlert", properties=connectionProperties)
-
-# COMMAND ----------
-
 table_df = table_df.withColumn('GoldsteinScale', table_df['GoldsteinScale'].cast(IntegerType()))
 table_df = table_df.withColumn('MentionDocTone', table_df['MentionDocTone'].cast(IntegerType()))
-
-# COMMAND ----------
-
-display(table_df)
 
 # COMMAND ----------
 
@@ -67,8 +60,8 @@ countriesDaily_window = Window.partitionBy('ActionGeo_CountryName','EventDate').
 
 # get daily distribution of articles for each Event Code string within Window
 targetOutputPartitioned = targetOutput.withColumn('EventReportValue', F.col('nArticles')/F.sum('nArticles').over(countriesDaily_window))
-print((targetOutputPartitioned.count(), len(targetOutputPartitioned.columns)))
-targetOutputPartitioned.limit(2).toPandas()
+# print((targetOutputPartitioned.count(), len(targetOutputPartitioned.columns)))
+# targetOutputPartitioned.limit(2).toPandas()
 
 # COMMAND ----------
 
@@ -109,9 +102,9 @@ targetOutputPartitioned = targetOutputPartitioned.drop('ERV_3d_list','ERV_60d_li
                                                        'GRV_60d_list','TRV_3d_list','TRV_60d_list') \
                                                  .orderBy('EventDate', ascending=False)
 
-# verify output data
-print((targetOutputPartitioned.count(), len(targetOutputPartitioned.columns)))
-targetOutputPartitioned.limit(3).toPandas()
+# # verify output data
+# print((targetOutputPartitioned.count(), len(targetOutputPartitioned.columns)))
+# targetOutputPartitioned.limit(3).toPandas()
 
 # COMMAND ----------
 
@@ -178,9 +171,9 @@ targetOutputTimelines = targetOutputTimelines.withColumn('TRV_3d_list', F.collec
                                              .withColumn('TRV_60d_IQR', IQR_udf(F.col('TRV_60d_quantile25'), F.col('TRV_60d_quantile75')))
       
 # verify output data
-targetOutputTimelines = targetOutputTimelines.orderBy('EventDate', ascending=False)
-print((targetOutputTimelines.count(), len(targetOutputTimelines.columns)))
-targetOutputTimelines.limit(3).toPandas()
+# targetOutputTimelines = targetOutputTimelines.orderBy('EventDate', ascending=False)
+# print((targetOutputTimelines.count(), len(targetOutputTimelines.columns)))
+# targetOutputTimelines.limit(3).toPandas()
 
 # COMMAND ----------
 
@@ -226,24 +219,24 @@ assessVariableOutliers = assessVariableOutliers.drop('ERV_3d_list', 'ERV_60d_lis
 
 # verify output data
 assessVariableOutliers = assessVariableOutliers.orderBy('EventDate', ascending=False)
-print((assessVariableOutliers.count(), len(assessVariableOutliers.columns)))
-assessVariableOutliers.select('ActionGeo_CountryName','EventDate','EventRootCode','nArticles',
-                              'ERV_3d_MaxOutlier','ERV_60d_MaxOutlier',
-                              'GRV_3d_MinOutlier','GRV_60d_MinOutlier',
-                              'TRV_3d_MinOutlier','TRV_60d_MinOutlier'
-                             ).limit(10).toPandas()
+# print((assessVariableOutliers.count(), len(assessVariableOutliers.columns)))
+# assessVariableOutliers.select('ActionGeo_CountryName','EventDate','EventRootCode','nArticles',
+#                               'ERV_3d_MaxOutlier','ERV_60d_MaxOutlier',
+#                               'GRV_3d_MinOutlier','GRV_60d_MinOutlier',
+#                               'TRV_3d_MinOutlier','TRV_60d_MinOutlier'
+#                              ).limit(10).toPandas()
 
 # COMMAND ----------
 
 # DBTITLE 1,Add back Regions and Quad Class 
 # UNICEF Regions
-regionsDF = table_df.select('ActionGeo_CountryName', 'UNICEF_regions').dropDuplicates()
+regionsDF = spark.read.jdbc(url=jdbcUrl, table="cats.tbl_CountryCode", properties=connectionProperties)
 regions_dict = {row['ActionGeo_CountryName']:row['UNICEF_regions'] for row in regionsDF.collect()}
 regions_mapping_expr = F.create_map([F.lit(x) for x in chain(*regions_dict.items())])
 
 # Quad Class
-quadClass = table_df.select('QuadClass', 'EventRootCode').dropDuplicates()
-quadClass_dict = {row['EventRootCode']:row['QuadClass'] for row in quadClass.collect()}
+quadClass = spark.read.jdbc(url=jdbcUrl, table="cats.tbl_CameoCodes", properties=connectionProperties)
+quadClass_dict = {row['EventRootCode']:row['QuadClassString'] for row in quadClass.collect()}
 quadClass_mapping_expr = F.create_map([F.lit(x) for x in chain(*quadClass_dict.items())])
 
 # COMMAND ----------
@@ -251,12 +244,12 @@ quadClass_mapping_expr = F.create_map([F.lit(x) for x in chain(*quadClass_dict.i
 # Map dictionary over df to create string column
 assessVariableOutliers = assessVariableOutliers.withColumn('UNICEF_regions', regions_mapping_expr[F.col('ActionGeo_CountryName')])
 assessVariableOutliers = assessVariableOutliers.withColumn('QuadClass', quadClass_mapping_expr[F.col('EventRootCode')])
-assessVariableOutliers.limit(10).toPandas()
+#assessVariableOutliers.limit(10).toPandas()
 
 # COMMAND ----------
 
-min_date, max_date = assessVariableOutliers.select(F.min('EventDate'), F.max('EventDate')).first()
-min_date, max_date
+# min_date, max_date = assessVariableOutliers.select(F.min('EventDate'), F.max('EventDate')).first()
+# min_date, max_date
 
 # COMMAND ----------
 
@@ -267,10 +260,23 @@ cols = ['ActionGeo_CountryName','UNICEF_regions','EventDate','QuadClass','EventR
        'ToneReportValue','TRV_3d_Median','TRV_3d_MinOutlier','TRV_60d_Median','TRV_60d_MinOutlier']
 
 assessVariableOutliersSelect = assessVariableOutliers.select(cols)
-assessVariableOutliersSelect.limit(10).toPandas()
+#assessVariableOutliersSelect.limit(10).toPandas()
 
 # COMMAND ----------
 
 # DBTITLE 1,Output to CSV for Data Upload to PowerBI
-powerBI = assessVariableOutliersSelect.filter(F.col('EventDate') >= F.lit('2021-02-01'))
-powerBI.write.format('csv').option('header',True).mode('overwrite').option('sep',',').save('/FileStore/tables/tmp/gdelt/msql_cats_dashboard_june2021.csv')
+# powerBI = assessVariableOutliersSelect.filter(F.col('EventDate') >= F.lit('2021-02-01'))
+
+# import os
+# TEMPORARY_BI_TARGET="dbfs:/FileStore/tables/tmp/gdelt/msql_cats_dashboard_june2021"
+# DESIRED_BI_TARGET="dbfs:/FileStore/tables/tmp/gdelt/msql_cats_dashboard_june2021.csv"
+
+# powerBI.coalesce(1).write.option("header", "true").mode('overwrite').csv(TEMPORARY_BI_TARGET)
+# temporaryPoweBI_csv = os.path.join(TEMPORARY_BI_TARGET, dbutils.fs.ls(TEMPORARY_BI_TARGET)[3][1])
+# dbutils.fs.cp(temporaryPoweBI_csv, DESIRED_BI_TARGET)
+
+# COMMAND ----------
+
+# DBTITLE 1,Output to SQL Database
+# create CATS Dashboard 
+assessVariableOutliersSelect.write.jdbc(url=jdbcUrl, table='CATS_Outlier_Dashboard_Medians', properties=connectionProperties, mode='overwrite')
