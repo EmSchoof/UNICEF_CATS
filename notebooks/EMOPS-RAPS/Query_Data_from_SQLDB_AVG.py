@@ -202,13 +202,13 @@ assessVariableOutliers = assessVariableOutliers.orderBy('EventDate', ascending=F
 
 # DBTITLE 1,Add back Regions and Quad Class 
 # UNICEF Regions
-regionsDF = table_df.select('ActionGeo_CountryName', 'UNICEF_regions').dropDuplicates()
+regionsDF = spark.read.jdbc(url=jdbcUrl, table="cats.tbl_CountryCode", properties=connectionProperties)
 regions_dict = {row['ActionGeo_CountryName']:row['UNICEF_regions'] for row in regionsDF.collect()}
 regions_mapping_expr = F.create_map([F.lit(x) for x in chain(*regions_dict.items())])
 
 # Quad Class
-quadClass = table_df.select('QuadClass', 'EventRootCode').dropDuplicates()
-quadClass_dict = {row['EventRootCode']:row['QuadClass'] for row in quadClass.collect()}
+quadClass = spark.read.jdbc(url=jdbcUrl, table="cats.tbl_CameoCodes", properties=connectionProperties)
+quadClass_dict = {row['EventRootCode']:row['QuadClassString'] for row in quadClass.collect()}
 quadClass_mapping_expr = F.create_map([F.lit(x) for x in chain(*quadClass_dict.items())])
 
 # COMMAND ----------
@@ -252,12 +252,12 @@ assessVariableOutliersSelect = assessVariableOutliers.select(cols)
 # DBTITLE 1,Output ALL to CSV
 #powerBI = assessVariableOutliersSelect.filter(F.col('EventDate') >= F.lit('2021-02-01'))
 
-TEMPORARY_BI_TARGET="dbfs:/FileStore/tables/tmp/gdelt/ALL_msql_cats_avg_dashboard_june2021"
-DESIRED_BI_TARGET="dbfs:/FileStore/tables/tmp/gdelt/ALL_msql_cats_avg_dashboard_june2021.csv"
+# TEMPORARY_BI_TARGET="dbfs:/FileStore/tables/tmp/gdelt/ALL_msql_cats_avg_dashboard_june2021"
+# DESIRED_BI_TARGET="dbfs:/FileStore/tables/tmp/gdelt/ALL_msql_cats_avg_dashboard_june2021.csv"
 
-assessVariableOutliersSelect.coalesce(1).write.option("header", "true").mode('overwrite').csv(TEMPORARY_BI_TARGET)
-temporaryPoweBI_csv = os.path.join(TEMPORARY_BI_TARGET, dbutils.fs.ls(TEMPORARY_BI_TARGET)[3][1])
-dbutils.fs.cp(temporaryPoweBI_csv, DESIRED_BI_TARGET)
+# assessVariableOutliersSelect.coalesce(1).write.option("header", "true").mode('overwrite').csv(TEMPORARY_BI_TARGET)
+# temporaryPoweBI_csv = os.path.join(TEMPORARY_BI_TARGET, dbutils.fs.ls(TEMPORARY_BI_TARGET)[3][1])
+# dbutils.fs.cp(temporaryPoweBI_csv, DESIRED_BI_TARGET)
 
 # COMMAND ----------
 
